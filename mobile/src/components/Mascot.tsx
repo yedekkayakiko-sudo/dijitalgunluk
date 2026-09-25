@@ -1,3 +1,4 @@
+import { isNight, seasonOf, type Season } from '@gunluk/core';
 import { useEffect, useState } from 'react';
 import { Animated, Easing } from 'react-native';
 import Svg, { Circle, Ellipse, G, Path } from 'react-native-svg';
@@ -23,10 +24,38 @@ function frameTop(stage: number): number {
  * little round glasses.
  */
 export function Mascot({
-  size = 96, expression = 'idle', stage = 1, aged = false, breathing = true,
-}: { size?: number; expression?: Expression; stage?: number; aged?: boolean; breathing?: boolean }) {
+  size = 96, expression = 'idle', stage = 1, aged = false, breathing = true, dressed = true,
+}: {
+  size?: number;
+  expression?: Expression;
+  stage?: number;
+  aged?: boolean;
+  /** Animated (breathing, blinking). Off for small static uses. */
+  breathing?: boolean;
+  /** Seasonal and night-time accessories. */
+  dressed?: boolean;
+}) {
   const c = useColors();
   const [breathe] = useState(() => new Animated.Value(0));
+  const [blink, setBlink] = useState(false);
+  const [look] = useState(() => ({ season: seasonOf(), night: isNight() }));
+
+  // Blinks every few seconds, at a slightly irregular rhythm, like a living thing.
+  useEffect(() => {
+    if (!breathing) return;
+    let timer: ReturnType<typeof setTimeout>;
+    const next = () => {
+      timer = setTimeout(() => {
+        setBlink(true);
+        timer = setTimeout(() => {
+          setBlink(false);
+          next();
+        }, 140);
+      }, 2400 + Math.random() * 3200);
+    };
+    next();
+    return () => clearTimeout(timer);
+  }, [breathing]);
 
   useEffect(() => {
     if (!breathing) return;
@@ -58,8 +87,9 @@ export function Mascot({
           <Path d="M30 60 C34 48 44 40 52 38" stroke="#FFFFFF" strokeWidth={4} strokeLinecap="round" opacity={0.35} fill="none" />
           <Ellipse cx={36} cy={80} rx={7} ry={4.5} fill="#F2A3A0" opacity={expression === 'caring' || expression === 'love' ? 0.8 : 0.5} />
           <Ellipse cx={84} cy={80} rx={7} ry={4.5} fill="#F2A3A0" opacity={expression === 'caring' || expression === 'love' ? 0.8 : 0.5} />
-          <Face expression={expression} />
+          <Face expression={expression} blink={blink} />
           {aged ? <Glasses /> : null}
+          {dressed ? <Accessories season={look.season} night={look.night} /> : null}
         </G>
       </Svg>
     </Animated.View>
@@ -163,14 +193,61 @@ function Glasses() {
   );
 }
 
-function Face({ expression }: { expression: Expression }) {
-  const eye = (cx: number, big = false) => (
+function Accessories({ season, night }: { season: Season; night: boolean }) {
+  return (
     <G>
-      <Ellipse cx={cx} cy={68} rx={big ? 6 : 5} ry={big ? 7.5 : 6.5} fill={INK} />
-      <Circle cx={cx + 2} cy={65.5} r={1.8} fill="#FFFFFF" />
+      {season === 'winter' ? (
+        <G>
+          <Path d="M20 94 Q60 110 100 94 L100 102 Q60 118 20 102 Z" fill="#E0645A" />
+          <Path d="M36 99 L36 107 M52 102 L52 110 M68 102 L68 110 M84 99 L84 107" stroke="#F6C1BB" strokeWidth={3} />
+          <Path d="M76 104 l5 14 l9 -3 l-5 -13 z" fill="#E0645A" />
+        </G>
+      ) : season === 'spring' ? (
+        <G>
+          {[0, 72, 144, 216, 288].map((a) => (
+            <Ellipse key={a} cx={28} cy={45} rx={3} ry={4.5} fill="#F59FB5" transform={`rotate(${a} 28 49)`} />
+          ))}
+          <Circle cx={28} cy={49} r={2.6} fill="#F7D774" />
+        </G>
+      ) : season === 'summer' ? (
+        <G>
+          {[0, 45, 90, 135, 180, 225, 270, 315].map((a) => (
+            <Path key={a} d="M28 41 L28 44" stroke="#F2B53C" strokeWidth={2} strokeLinecap="round" transform={`rotate(${a} 28 49)`} />
+          ))}
+          <Circle cx={28} cy={49} r={4} fill="#F7D774" />
+        </G>
+      ) : (
+        <G>
+          <Path d="M24 54 C18 50 18 42 26 40 C28 46 31 50 24 54 Z" fill="#E08A3C" />
+          <Path d="M24 54 Q25 47 26 41" stroke="#B5622A" strokeWidth={1.2} fill="none" />
+        </G>
+      )}
+      {night ? (
+        <G>
+          <Path d="M68 36 Q84 18 100 40 Q86 36 72 44 Z" fill="#7B86D9" />
+          <Circle cx={100} cy={40} r={3.5} fill="#FFFFFF" />
+          <Circle cx={80} cy={32} r={1.2} fill="#FFFFFF" />
+          <Circle cx={88} cy={36} r={1} fill="#FFFFFF" />
+        </G>
+      ) : null}
     </G>
   );
+}
+
+const OPEN_EYES: Expression[] = ['idle', 'curious', 'surprised'];
+
+function Face({ expression, blink = false }: { expression: Expression; blink?: boolean }) {
   const stroke = { stroke: INK, strokeWidth: 3, strokeLinecap: 'round' as const, fill: 'none' };
+  const closed = blink && OPEN_EYES.includes(expression);
+  const eye = (cx: number, big = false) =>
+    closed ? (
+      <Path d={`M${cx - 5} 68 Q${cx} 71 ${cx + 5} 68`} {...stroke} strokeWidth={2.5} />
+    ) : (
+      <G>
+        <Ellipse cx={cx} cy={68} rx={big ? 6 : 5} ry={big ? 7.5 : 6.5} fill={INK} />
+        <Circle cx={cx + 2} cy={65.5} r={1.8} fill="#FFFFFF" />
+      </G>
+    );
   const heart = (x: number, y: number, s: number) => (
     <Path d={`M${x} ${y + s * 0.3} c-${s * 0.5} -${s * 0.5} -${s} ${s * 0.1} -${s * 0.5} ${s * 0.6} l${s * 0.5} ${s * 0.5} l${s * 0.5} -${s * 0.5} c${s * 0.5} -${s * 0.5} 0 -${s * 1.1} -${s * 0.5} -${s * 0.6} z`} fill="#E8665A" />
   );

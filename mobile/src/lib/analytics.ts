@@ -11,7 +11,7 @@ import { readSettings } from './settings';
 export type EventName =
   | 'app_open' | 'onboarding_done' | 'ai_enabled' | 'entry_saved' | 'reaction_shown' | 'chat_sent' | 'scenario_played'
   | 'letter_written' | 'letter_opened' | 'goal_created' | 'goal_reviewed' | 'pet_fed' | 'stage_up' | 'breathing_done'
-  | 'backup_exported' | 'support_shown' | 'notification_opened' | 'quota_reached';
+  | 'backup_exported' | 'support_shown' | 'notification_opened' | 'quota_reached' | 'mascot_shared' | 'memory_callback';
 
 type Queued = { name: EventName; day: string; props?: Record<string, string | number | boolean> };
 

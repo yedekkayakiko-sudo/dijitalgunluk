@@ -1,16 +1,17 @@
 import {
-  dailyPrompt, extractThemes, goalPhase, growthFor, isOpenable, onThisDay, rhythmMessage, writingRhythm,
-  type FutureLetter, type Goal, type GoalCheckin, type Stage,
+  dailyPrompt, detectCrisis, extractThemes, goalPhase, growthFor, isOpenable, onThisDay, pickMemoryCallback, rhythmMessage, writingRhythm,
+  type FutureLetter, type Goal, type GoalCheckin, type MemoryCallback, type Stage,
 } from '@gunluk/core';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { EntryCard } from '@/components/EntryCard';
 import { PetMascot } from '@/components/PetMascot';
+import { canShare, ShareMascot } from '@/components/ShareMascot';
 import { StageUp } from '@/components/StageUp';
 import { Button, Card, Gap, Row, Screen, T } from '@/components/ui';
 import { track } from '@/lib/analytics';
-import { allEntryDates, listCheckins, listEntities, listEntries, listGoals, listLetters, loadDraft, type StoredEntry } from '@/lib/db';
+import { allEntryDates, kvGet, kvSet, listCheckins, listEntities, listEntries, listGoals, listLetters, loadDraft, type StoredEntry } from '@/lib/db';
 import { usePet } from '@/lib/pet';
 import { useSettings } from '@/lib/settings';
 import { serif, space, useColors } from '@/theme';
@@ -19,6 +20,25 @@ function greeting(name: string): string {
   const h = new Date().getHours();
   const part = h < 5 ? 'İyi geceler' : h < 12 ? 'Günaydın' : h < 18 ? 'Merhaba' : 'İyi akşamlar';
   return name ? `${part}, ${name}` : part;
+}
+
+/**
+ * "Hatırlıyor musun?": at most one memory a week, from about a month, three
+ * months, six months or a year ago. The same one stays for the whole day.
+ */
+async function chooseCallback(all: StoredEntry[]): Promise<MemoryCallback<StoredEntry> | null> {
+  const today = new Date().toDateString();
+  const saved = JSON.parse((await kvGet('memory-callback')) ?? 'null') as { id: string; day: string; at: number } | null;
+  const eligible = all.filter((e) => e.privacy !== 'private' && detectCrisis(e.text).level === 'none');
+  // Same day: show the memory already chosen this morning.
+  if (saved?.day === today) return pickMemoryCallback(eligible.filter((e) => e.id === saved.id), new Date(saved.at));
+  if (saved && Date.now() - saved.at < 7 * 86_400_000) return null;
+  const pick = pickMemoryCallback(eligible);
+  if (pick) {
+    await kvSet('memory-callback', JSON.stringify({ id: pick.entry.id, day: today, at: Date.now() }));
+    track('memory_callback');
+  }
+  return pick;
 }
 
 export default function Home() {
@@ -36,6 +56,8 @@ export default function Home() {
   const [awake, setAwake] = useState(false);
   const [feeding, setFeeding] = useState(0);
   const [grewTo, setGrewTo] = useState<Stage | null>(null);
+  const [callback, setCallback] = useState<MemoryCallback<StoredEntry> | null>(null);
+  const [sharing, setSharing] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -49,7 +71,9 @@ export default function Home() {
         if (!alive) return;
         const active = goalList.map((g) => ({ goal: g, phase: goalPhase(g, checkins as GoalCheckin[]) })).filter((g) => g.phase !== 'reviewed');
         setRecent(latest);
-        setMemories(onThisDay(all));
+        const exact = onThisDay(all);
+        setMemories(exact);
+        setCallback(exact.length ? null : await chooseCallback(all));
         setRhythm(writingRhythm(dates));
         setLetters(allLetters.filter((l) => isOpenable(l) && !l.openedAt));
         setGoals(active);
@@ -73,9 +97,11 @@ export default function Home() {
     ? `Bugün benim doğum günüm! 🎂 ${info.age.label}. İyi ki varsın.`
     : sleeping
       ? 'Zzz… Seni bekliyordum. Bana dokunursan uyanırım!'
-      : rhythm
-        ? rhythmMessage(rhythm)
-        : 'Bugün nasıl geçti?';
+      : callback
+        ? `Hatırlıyor musun? ${callback.label} şöyle yazmıştın: “${callback.snippet}”`
+        : rhythm
+          ? rhythmMessage(rhythm)
+          : 'Bugün nasıl geçti?';
 
   const feed = async () => {
     setAwake(true);
@@ -102,9 +128,13 @@ export default function Home() {
       <Gap h={space.m} />
 
       <Card style={{ alignItems: 'center', gap: space.s, paddingTop: space.l }}>
-        <View style={{ backgroundColor: c.sunken, borderRadius: 16, paddingVertical: space.s, paddingHorizontal: space.m, maxWidth: '92%' }}>
+        <Pressable
+          disabled={!!line || !callback || sleeping}
+          onPress={() => callback && router.push(`/entry/${callback.entry.id}`)}
+          style={{ backgroundColor: c.sunken, borderRadius: 16, paddingVertical: space.s, paddingHorizontal: space.m, maxWidth: '92%' }}>
           <T v="body" style={{ textAlign: 'center' }}>{line ?? defaultLine}</T>
-        </View>
+          {!line && callback && !sleeping ? <T v="small" style={{ textAlign: 'center', marginTop: 2 }}>Sayfayı açmak için dokun</T> : null}
+        </Pressable>
         <PetMascot
           size={160}
           stage={info.index}
@@ -129,14 +159,18 @@ export default function Home() {
             <T v="small" style={{ textAlign: 'center', fontSize: 12 }}>{info.next.name} olmaya {info.next.minXp - pet.xp} damla kaldı</T>
           </View>
         ) : null}
-        <Button
-          label={pet.drops > 0 ? `💧 Su ver (${pet.drops})` : '💧 Yazdıkça damla kazanırsın'}
-          kind={pet.drops > 0 ? 'primary' : 'secondary'}
-          small
-          disabled={pet.drops <= 0}
-          onPress={feed}
-          style={{ alignSelf: 'stretch' }}
-        />
+        <Row style={{ alignSelf: 'stretch', flexWrap: 'nowrap' }}>
+          <Button
+            label={pet.drops > 0 ? `💧 Su ver (${pet.drops})` : '💧 Yazdıkça damla kazanırsın'}
+            kind={pet.drops > 0 ? 'primary' : 'secondary'}
+            small
+            disabled={pet.drops <= 0}
+            onPress={feed}
+            style={{ flex: 1 }}
+          />
+          <Button label="🫁" kind="secondary" small onPress={() => router.push('/breathe')} />
+          {canShare ? <Button label="📸" kind="secondary" small onPress={() => setSharing(true)} /> : null}
+        </Row>
       </Card>
 
       <Gap />
@@ -148,11 +182,7 @@ export default function Home() {
       </Pressable>
       <Gap h={space.s} />
       <Button label={hasDraft ? 'Yarım kalan sayfana devam et' : 'Bugünü yaz'} onPress={() => router.push('/write')} />
-      <Gap h={space.s} />
-      <Row style={{ flexWrap: 'nowrap' }}>
-        <Button label="Tek kelimeyle" kind="secondary" onPress={() => router.push('/write?mode=word')} style={{ flex: 1 }} />
-        <Button label="🫁 Nefes" kind="secondary" onPress={() => router.push('/breathe')} style={{ flex: 1 }} />
-      </Row>
+      <Button label="Enerjin yok mu? Tek kelimeyle anlat" kind="ghost" small onPress={() => router.push('/write?mode=word')} style={{ marginTop: 4 }} />
 
       {due || checkin ? (
         <>
@@ -202,6 +232,11 @@ export default function Home() {
       )}
 
       <StageUp stage={grewTo} index={info.index} aged={info.aged} onClose={() => setGrewTo(null)} />
+      <ShareMascot
+        visible={sharing}
+        headline={info.age && info.age.days > 0 ? `${settings.mascotName} ${info.age.label}! 🌱` : `Tanışın: ${settings.mascotName} 🌱`}
+        onClose={() => setSharing(false)}
+      />
     </Screen>
   );
 }

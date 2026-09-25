@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MoodPicker, PRIVACY, PrivacyPicker, WEATHER } from '@/components/pickers';
+import { WritingBuddy } from '@/components/WritingBuddy';
 import { Button, Chip, Row, T } from '@/components/ui';
 import { clearDraft, getEntry, loadDraft, newId, saveDraft, saveEntry, type Draft } from '@/lib/db';
 import { afterSave } from '@/lib/mascot';
@@ -190,7 +191,8 @@ export default function Write() {
           </View>
         ) : (
           <>
-            <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: space.m, flexGrow: 1 }} keyboardShouldPersistTaps="handled">
+            <View style={{ flex: 1 }}>
+            <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: space.m, paddingBottom: 90, flexGrow: 1 }} keyboardShouldPersistTaps="handled">
               <TextInput
                 value={text}
                 onChangeText={setText}
@@ -214,6 +216,8 @@ export default function Write() {
               ) : null}
               {photos.length > 0 ? <T v="small" style={{ marginTop: 4 }}>Fotoğrafı kaldırmak için basılı tut.</T> : null}
             </ScrollView>
+            <WritingBuddy text={text} mood={mood} />
+            </View>
 
             <View style={{ borderTopWidth: 1, borderColor: c.border, backgroundColor: c.card, padding: space.m, gap: space.m }}>
               <MoodPicker value={mood} onChange={setMood} />

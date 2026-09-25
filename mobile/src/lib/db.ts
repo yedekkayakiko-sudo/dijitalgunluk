@@ -513,6 +513,22 @@ export async function kvSet(key: string, value: string): Promise<void> {
   await db.runAsync('INSERT OR REPLACE INTO kv (key, value) VALUES (?, ?)', key, value);
 }
 
+// ---------- diagnostics ----------
+
+/** For the system check screen: is SQLCipher active, and how much is stored. */
+export async function diagnose(): Promise<{ cipher: string | null; entries: number; keyPresent: boolean }> {
+  const db = await getDb();
+  let cipher: string | null = null;
+  try {
+    cipher = (await db.getFirstAsync<{ cipher_version: string }>('PRAGMA cipher_version'))?.cipher_version ?? null;
+  } catch {
+    cipher = null;
+  }
+  const entries = (await db.getFirstAsync<{ n: number }>('SELECT COUNT(*) AS n FROM entries'))?.n ?? 0;
+  const keyPresent = Platform.OS === 'web' ? false : !!(await SecureStore.getItemAsync(KEY_NAME));
+  return { cipher, entries, keyPresent };
+}
+
 // ---------- forget everything ----------
 
 /** "Unutulma hakkı": wipes every table. secure_delete overwrites the freed pages. */

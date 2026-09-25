@@ -1,11 +1,12 @@
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, FlatList, KeyboardAvoidingView, Platform, Pressable, TextInput, View } from 'react-native';
+import { Alert, FlatList, KeyboardAvoidingView, Platform, Pressable, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { EntryCard } from '@/components/EntryCard';
 import { Mascot } from '@/components/Mascot';
 import { reportMascotText } from '@/components/MascotBubble';
 import { SupportStrip } from '@/components/SupportStrip';
+import { Thinking } from '@/components/Thinking';
 import { Chip, Row, T } from '@/components/ui';
 import { aiReady } from '@/lib/api';
 import { sendChat } from '@/lib/chat';
@@ -25,6 +26,7 @@ export default function Chat() {
   const [rows, setRows] = useState<ChatRow[]>([]);
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
+  const [streaming, setStreaming] = useState<string | null>(null);
   const list = useRef<FlatList<ChatRow>>(null);
 
   const withPages = async (m: ChatMessage): Promise<ChatRow> => ({
@@ -44,9 +46,10 @@ export default function Chat() {
     setSending(true);
     setRows((r) => [...r, { id: `tmp-${Date.now()}`, at: new Date().toISOString(), role: 'user', text: msg, pageIds: [], crisis: 'none', pages: [] }]);
     try {
-      await sendChat(msg);
+      await sendChat(msg, setStreaming);
     } finally {
       setSending(false);
+      setStreaming(null);
       load();
     }
   };
@@ -118,7 +121,19 @@ export default function Chat() {
               </View>
             )
           }
-          ListFooterComponent={sending ? <ActivityIndicator color={c.accent} style={{ marginTop: space.s }} /> : null}
+          ListFooterComponent={
+            sending ? (
+              streaming ? (
+                <View style={{ alignSelf: 'flex-start', maxWidth: '88%', backgroundColor: c.card, borderColor: c.border, borderWidth: 1, borderRadius: 18, borderBottomLeftRadius: 4, padding: space.m, marginTop: space.s }}>
+                  <T v="body">{streaming}</T>
+                </View>
+              ) : (
+                <View style={{ marginTop: space.s }}>
+                  <Thinking />
+                </View>
+              )
+            ) : null
+          }
         />
         {ai && rows.length ? <T v="small" style={{ textAlign: 'center', fontSize: 11 }}>Bir yanıtı bildirmek için üzerine basılı tut.</T> : null}
 

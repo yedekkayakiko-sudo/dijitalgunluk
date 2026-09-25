@@ -160,6 +160,9 @@ export default function SettingsScreen() {
         {serverStatus ? <T v="small">{serverStatus}</T> : null}
       </Row>
 
+      <Gap h={space.s} />
+      <Button label="🩺 Sistem kontrolü" kind="secondary" small onPress={() => router.push('/diagnostics')} />
+
       <Gap h={space.l} />
       <T v="heading">Unutulma hakkı</T>
       <Gap h={space.s} />

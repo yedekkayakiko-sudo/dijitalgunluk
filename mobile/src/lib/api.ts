@@ -1,4 +1,5 @@
-import { fillName, scrubIdentifiers, type MascotTone } from '@gunluk/core';
+import { fillName, scrubIdentifiers, type CrisisLevel, type MascotTone } from '@gunluk/core';
+import { fetch as streamingFetch } from 'expo/fetch';
 import { kvGet, kvSet, newId } from './db';
 import { hasValidConsent, readSettings, type Settings } from './settings';
 
@@ -52,6 +53,13 @@ function persona(s: Settings): { tone: MascotTone; mascotName: string; hasName: 
 
 export const scrub = (s: Settings, text: string) => scrubIdentifiers(text, [s.userName]);
 
+export interface ChatDone {
+  reply: string;
+  usedPageIds: string[];
+  crisis: CrisisLevel;
+  source: 'ai' | 'template';
+}
+
 export interface ChatTurn {
   role: 'user' | 'assistant';
   content: string;
@@ -64,19 +72,66 @@ export const api = {
     return r && { ...r, text: fillName(r.text, s.userName) };
   },
 
-  async chat(p: { messages: ChatTurn[]; notes: string[]; goals: string[]; pages: { id: string; date: string; text: string }[]; longHeavy: boolean }) {
+  /**
+   * Streams the mascot's reply. `onText` receives the whole visible text so far
+   * (with the user's name filled in); resolves with the final, safety-checked reply.
+   */
+  async chat(
+    p: { messages: ChatTurn[]; notes: string[]; goals: string[]; pages: { id: string; date: string; text: string }[]; longHeavy: boolean },
+    onText?: (soFar: string) => void,
+  ): Promise<ChatDone | null> {
     const s = await readSettings();
-    const r = await post<{ reply: string; usedPageIds: string[]; crisis: 'none' | 'concern' | 'acute'; source: 'ai' | 'template' }>(
-      '/v1/chat',
-      {
-        ...persona(s),
-        ...p,
-        messages: p.messages.map((m) => ({ ...m, content: scrub(s, m.content) })),
-        pages: p.pages.map((pg) => ({ ...pg, text: scrub(s, pg.text) })),
-      },
-      s,
-    );
-    return r && { ...r, reply: fillName(r.reply, s.userName) };
+    if (!aiReady(s)) return null;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 60_000);
+    try {
+      const res = await streamingFetch(`${base(s)}/v1/chat`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', accept: 'text/event-stream', 'x-install-id': await installId(), ...appKeyHeader() },
+        body: JSON.stringify({
+          ...persona(s),
+          ...p,
+          messages: p.messages.map((m) => ({ ...m, content: scrub(s, m.content) })),
+          pages: p.pages.map((pg) => ({ ...pg, text: scrub(s, pg.text) })),
+        }),
+        signal: controller.signal,
+      });
+      if (res.status === 429 || res.status === 503) {
+        return { reply: 'Bugünlük biraz yoruldum, yapraklarım dinlenmek istiyor. Yarın yine buradayım. 🌱', usedPageIds: [], crisis: 'none', source: 'template' };
+      }
+      if (!res.ok || !res.body) return null;
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let soFar = '';
+      let done: ChatDone | null = null;
+      for (;;) {
+        const { value, done: finished } = await reader.read();
+        if (value) buffer += decoder.decode(value, { stream: true });
+        let cut: number;
+        while ((cut = buffer.indexOf('\n\n')) >= 0) {
+          const block = buffer.slice(0, cut);
+          buffer = buffer.slice(cut + 2);
+          const event = /^event: ?(.*)$/m.exec(block)?.[1];
+          const data = /^data: ?(.*)$/m.exec(block)?.[1];
+          if (!data) continue;
+          const payload = JSON.parse(data) as { t?: string } & ChatDone;
+          if (event === 'delta' && payload.t) {
+            soFar += payload.t;
+            // Hide a half-arrived {AD} token until it is complete.
+            onText?.(fillName(soFar.replace(/\{A?D?$/, ''), s.userName));
+          } else if (event === 'done') {
+            done = { ...payload, reply: fillName(payload.reply, s.userName) };
+          }
+        }
+        if (finished) break;
+      }
+      return done;
+    } catch {
+      return null;
+    } finally {
+      clearTimeout(timer);
+    }
   },
 
   async extract(text: string) {

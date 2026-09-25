@@ -8,6 +8,8 @@ import { MascotBubble } from '@/components/MascotBubble';
 import { TonePicker } from '@/components/TonePicker';
 import { Button, Card, Chip, Gap, Row, Screen, T } from '@/components/ui';
 import { track } from '@/lib/analytics';
+import { newId } from '@/lib/db';
+import { saveNotes, type MemoryNote, type NoteCategory } from '@/lib/memory';
 import { askPermission } from '@/lib/notifications';
 import { CONSENT_VERSION, useSettings } from '@/lib/settings';
 import { space, useColors } from '@/theme';
@@ -22,10 +24,21 @@ export default function Onboarding() {
   const [ai, setAi] = useState(false);
   const [consent, setConsent] = useState({ special: false, transfer: false });
   const [reminder, setReminder] = useState<string | null>('21:00');
+  const [about, setAbout] = useState({ people: '', helps: '', now: '' });
 
   const input = { backgroundColor: c.card, borderColor: c.border, borderWidth: 1, borderRadius: 12, padding: 12, color: c.text, fontSize: 17 } as const;
 
   const finish = async () => {
+    // What the user shared about themselves becomes the mascot's first memory notes.
+    const answers: [NoteCategory, string, string][] = [
+      ['kisi', 'Hayatındaki önemli insanlar', about.people],
+      ['iyi_gelen', 'Ona iyi gelenler', about.helps],
+      ['durum', 'Şu sıralar', about.now],
+    ];
+    const seed: MemoryNote[] = answers
+      .filter(([, , value]) => value.trim())
+      .map(([category, label, value]) => ({ id: newId(), category, text: `${label}: ${value.trim()}`, pinned: true }));
+    if (seed.length) await saveNotes(seed);
     let reminderTime = reminder;
     if (reminderTime && !(await askPermission())) reminderTime = null;
     await update({
@@ -74,6 +87,28 @@ export default function Onboarding() {
       canNext: settings.mascotName.trim().length > 0,
     },
     {
+      expression: 'love',
+      stage: 1,
+      say: 'Seni biraz tanıyayım mı? İstediğini cevapla, istediğini boş bırak. Sadece bu telefonda kalır.',
+      body: (
+        <View style={{ gap: space.m }}>
+          <View style={{ gap: 4 }}>
+            <T v="small">Hayatındaki en önemli insanlardan biri kim?</T>
+            <TextInput value={about.people} onChangeText={(people) => setAbout((a) => ({ ...a, people }))} placeholder="ör. ablam Elif, en yakın arkadaşım Can" placeholderTextColor={c.muted} style={input} maxLength={120} />
+          </View>
+          <View style={{ gap: 4 }}>
+            <T v="small">Sana ne iyi gelir?</T>
+            <TextInput value={about.helps} onChangeText={(helps) => setAbout((a) => ({ ...a, helps }))} placeholder="ör. akşam yürüyüşleri, müzik, kedimle oynamak" placeholderTextColor={c.muted} style={input} maxLength={120} />
+          </View>
+          <View style={{ gap: 4 }}>
+            <T v="small">Şu sıralar hayatında neler oluyor?</T>
+            <TextInput value={about.now} onChangeText={(now) => setAbout((a) => ({ ...a, now }))} placeholder="ör. yeni işe başladım, sınavlara hazırlanıyorum" placeholderTextColor={c.muted} style={input} maxLength={160} />
+          </View>
+        </View>
+      ),
+      next: about.people || about.helps || about.now ? 'Devam' : 'Şimdilik geç',
+    },
+    {
       expression: 'idle',
       stage: 2,
       say: 'Nasıl konuşmamı istersin?',
@@ -81,7 +116,7 @@ export default function Onboarding() {
     },
     {
       expression: 'caring',
-      stage: 3,
+      stage: 2,
       say: 'Gizliliğin benim için her şeyden önemli.',
       body: (
         <View style={{ gap: space.m }}>

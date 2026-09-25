@@ -1,14 +1,18 @@
 import type { Stage } from '@gunluk/core';
 import { useEffect, useState } from 'react';
+import { useSettings } from '@/lib/settings';
 import { Animated, Modal, View } from 'react-native';
 import { space, useColors } from '@/theme';
 import { Mascot } from './Mascot';
+import { canShare, ShareMascot } from './ShareMascot';
 import { Button, T } from './ui';
 
 /** Celebration when the mascot reaches a new growth stage. */
 export function StageUp({ stage, index, aged, onClose }: { stage: Stage | null; index: number; aged: boolean; onClose: () => void }) {
   const c = useColors();
+  const { settings } = useSettings();
   const [scale] = useState(() => new Animated.Value(0.6));
+  const [sharing, setSharing] = useState(false);
   useEffect(() => {
     if (!stage) return;
     scale.setValue(0.6);
@@ -25,8 +29,10 @@ export function StageUp({ stage, index, aged, onClose }: { stage: Stage | null; 
           <T v="heading">Artık bir {stage?.name.toLocaleLowerCase('tr-TR')}</T>
           <T v="muted" style={{ textAlign: 'center' }}>{stage?.line}</T>
           <Button label="Yaşasın!" onPress={onClose} style={{ alignSelf: 'stretch' }} />
+          {canShare ? <Button label="📸 Paylaş" kind="ghost" small onPress={() => setSharing(true)} /> : null}
         </View>
       </View>
+      <ShareMascot visible={sharing} headline={`${settings.mascotName} ${stage?.name.toLocaleLowerCase('tr-TR') ?? ''} oldu! 🌱`} onClose={() => setSharing(false)} />
     </Modal>
   );
 }

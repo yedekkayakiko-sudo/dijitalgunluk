@@ -1,9 +1,12 @@
+import { reminderPlan } from '@gunluk/core';
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 
 /*
- * Gentle, local-only reminders: one a day at the chosen time, in the mascot's
- * voice, never guilt-tripping. Letters and goals also get a note on their day.
+ * Gentle, local-only reminders in the mascot's voice, never guilt-tripping:
+ * one a day for the coming week; if the user stays away, only two soft
+ * "missed you" notes (days 10 and 21), then silence. Re-planned on every
+ * app open. Letters and goals also get a note on their day.
  */
 
 const LINES = [
@@ -14,6 +17,11 @@ const LINES = [
   'Bugün seni ne gülümsetti? Merak ettim.',
   'Bir bardak su, bir sayfa günlük. İkisi de iyi gelir. 💧',
   'Sessiz bir gün müydü, dolu dolu mu? Anlatırsan dinlerim.',
+];
+
+const MISSED = [
+  'Seni özledim. Ne zaman istersen buradayım, acele yok. 🌱',
+  'Filizim seni düşünüyor. Tek bir kelime yazsan bile sevinirim.',
 ];
 
 export function initNotifications(): void {
@@ -33,20 +41,19 @@ export async function askPermission(): Promise<boolean> {
   return (await Notifications.requestPermissionsAsync()).granted;
 }
 
-/** Schedules the next 7 daily reminders with varied lines (re-run on each app open). */
+/** Re-plans the reminders from today (called on each app open and when the time changes). */
 export async function scheduleDailyReminders(time: string | null, mascotName: string): Promise<void> {
   if (Platform.OS === 'web') return;
   const existing = await Notifications.getAllScheduledNotificationsAsync();
-  await Promise.all(existing.filter((n) => n.content.data?.kind === 'daily').map((n) => Notifications.cancelScheduledNotificationAsync(n.identifier)));
-  if (!time) return;
-  const [h, m] = time.split(':').map(Number);
-  const now = new Date();
-  for (let i = 0; i < 7; i++) {
-    const at = new Date(now.getFullYear(), now.getMonth(), now.getDate() + i, h, m);
-    if (at <= now) continue;
+  await Promise.all(
+    existing.filter((n) => n.content.data?.kind === 'daily' || n.content.data?.kind === 'missed').map((n) => Notifications.cancelScheduledNotificationAsync(n.identifier)),
+  );
+  let missed = 0;
+  for (const slot of reminderPlan(time)) {
+    const body = slot.kind === 'daily' ? LINES[slot.at.getDate() % LINES.length] : MISSED[missed++ % MISSED.length];
     await Notifications.scheduleNotificationAsync({
-      content: { title: mascotName, body: LINES[(at.getDate() + i) % LINES.length], data: { kind: 'daily' } },
-      trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: at },
+      content: { title: mascotName, body, data: { kind: slot.kind } },
+      trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: slot.at },
     });
   }
 }

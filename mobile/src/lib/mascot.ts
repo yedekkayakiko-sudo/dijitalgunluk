@@ -56,8 +56,12 @@ export async function afterSave(entry: Entry, isNew: boolean): Promise<MascotRep
   if (!speak || !decision.text) return { kind: 'none', crisisLevel: decision.crisisLevel, text: null, drops };
 
   let text = decision.text;
+  const notes = await noteTexts();
+  if (decision.kind === 'welcome' && notes.length) {
+    text = 'İlk sayfan! Bana anlattıklarını da not ettim; artık seni tanımaya başladım. Hoş geldin. 🌱';
+  }
   if (decision.aiAllowed && ai) {
-    const r = await api.reaction({ kind: decision.kind, subject: decision.subject, draft: decision.text, entry: entry.text, notes: await noteTexts() });
+    const r = await api.reaction({ kind: decision.kind, subject: decision.subject, draft: text, entry: entry.text, notes });
     if (r?.text) text = r.text;
   }
   await addReaction({ entryId: entry.id, kind: decision.kind, subject: decision.subject, text, at: new Date().toISOString() });

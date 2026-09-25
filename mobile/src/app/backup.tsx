@@ -4,7 +4,7 @@ import { ActivityIndicator, Alert, TextInput } from 'react-native';
 import { MascotBubble } from '@/components/MascotBubble';
 import { Button, Card, Gap, Screen, T } from '@/components/ui';
 import { track } from '@/lib/analytics';
-import { exportBackup, readBackup, restoreBackup, WrongPasswordError } from '@/lib/backup';
+import { exportBackup, openBackup, WrongPasswordError } from '@/lib/backup';
 import { kvGet, kvSet } from '@/lib/db';
 import { usePet } from '@/lib/pet';
 import { useSettings } from '@/lib/settings';
@@ -49,24 +49,27 @@ export default function Backup() {
   const doRestore = async () => {
     setBusy('Yedek açılıyor…');
     try {
-      const payload = await readBackup(restorePassword);
+      const opened = await openBackup(restorePassword);
       setBusy(null);
-      if (!payload) return;
+      if (!opened) return;
+      const { meta } = opened;
       Alert.alert(
         'Bu cihazdaki her şey değiştirilsin mi?',
-        `${new Date(payload.createdAt).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' })} tarihli yedekte ${payload.tables.entries?.length ?? 0} sayfa var. Bu cihazdaki mevcut günlük silinip yerine yedek yüklenecek.`,
+        `${new Date(meta.createdAt).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' })} tarihli yedekte ${meta.tables.entries?.length ?? 0} sayfa ve ${meta.photoCount} fotoğraf var. Bu cihazdaki mevcut günlük silinip yerine yedek yüklenecek.`,
         [
-          { text: 'Vazgeç', style: 'cancel' },
+          { text: 'Vazgeç', style: 'cancel', onPress: () => opened.close() },
           {
             text: 'Geri yükle', style: 'destructive',
             onPress: async () => {
               setBusy('Geri yükleniyor…');
               try {
-                await restoreBackup(payload);
+                await opened.restore();
                 await reload();
                 await refresh();
                 setRestorePassword('');
                 Alert.alert('Hoş geldin geri! 🌱', 'Günlüğün geri yüklendi.', [{ text: 'Tamam', onPress: () => router.replace('/') }]);
+              } catch (e) {
+                Alert.alert('Geri yüklenemedi', e instanceof Error ? e.message : 'Bir sorun oluştu.');
               } finally {
                 setBusy(null);
               }

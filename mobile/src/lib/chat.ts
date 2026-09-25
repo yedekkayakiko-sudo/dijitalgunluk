@@ -32,7 +32,8 @@ async function relevantPages(question: string) {
   return hits.map((h) => byId.get(h.id)!).filter(Boolean);
 }
 
-export async function sendChat(text: string): Promise<ChatMessage> {
+/** `onPartial` receives the reply as it streams in. */
+export async function sendChat(text: string, onPartial?: (soFar: string) => void): Promise<ChatMessage> {
   const settings = await readSettings();
   const now = new Date().toISOString();
   const crisis: CrisisLevel = detectCrisis(text).level;
@@ -66,13 +67,16 @@ export async function sendChat(text: string): Promise<ChatMessage> {
     if (longHeavy) await kvSet('long-heavy-hint', now);
   }
 
-  const res = await api.chat({
-    messages: history,
-    notes,
-    goals: active,
-    pages: pages.map((p) => ({ id: p.id, date: dateLabel(p.createdAt), text: people[p.id]?.length ? `${p.text}\n(Geçenler: ${people[p.id].join(', ')})` : p.text })),
-    longHeavy,
-  });
+  const res = await api.chat(
+    {
+      messages: history,
+      notes,
+      goals: active,
+      pages: pages.map((p) => ({ id: p.id, date: dateLabel(p.createdAt), text: people[p.id]?.length ? `${p.text}\n(Geçenler: ${people[p.id].join(', ')})` : p.text })),
+      longHeavy,
+    },
+    onPartial,
+  );
   if (!res) return crisis === 'acute' ? reply(OFFLINE.crisis) : reply(OFFLINE.error);
   return reply(res.reply, res.usedPageIds, res.crisis);
 }
