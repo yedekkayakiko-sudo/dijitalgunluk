@@ -1,5 +1,6 @@
 import { detectCrisis, goalPhase, searchEntries, type CrisisLevel } from '@gunluk/core';
 import { track } from './analytics';
+import { awardBond } from './pet';
 import { aiReady, api } from './api';
 import { addChat, entityNamesForEntries, kvGet, kvSet, listChat, listCheckins, listEntries, listGoals, type ChatMessage } from './db';
 import { isLongHeavyPeriod } from './mascot';
@@ -39,6 +40,7 @@ export async function sendChat(text: string, onPartial?: (soFar: string) => void
   const crisis: CrisisLevel = detectCrisis(text).level;
   await addChat({ at: now, role: 'user', text, pageIds: [], crisis });
   track('chat_sent', { crisis: crisis !== 'none' });
+  awardBond(['chat']).catch(() => {});
 
   const pages = await relevantPages(text);
   const reply = async (t: string, pageIds: string[] = [], c: CrisisLevel = crisis) =>

@@ -1,4 +1,4 @@
-import { detectCrisis, MOODS, scenarioEligibility, type CrisisLevel } from '@gunluk/core';
+import { detectCrisis, keepsakeFor, MOODS, scenarioEligibility, type CrisisLevel } from '@gunluk/core';
 import { Image } from 'expo-image';
 import { router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useState } from 'react';
@@ -13,6 +13,7 @@ import { track } from '@/lib/analytics';
 import { aiReady, api } from '@/lib/api';
 import { deleteEntry, entitiesForEntry, getEntry, reactionForEntry, type StoredEntry, type StoredReaction } from '@/lib/db';
 import { noteTexts } from '@/lib/memory';
+import { awardBond } from '@/lib/pet';
 import { deletePhotos } from '@/lib/photos';
 import { takeQuota } from '@/lib/quota';
 import { useSettings } from '@/lib/settings';
@@ -29,7 +30,7 @@ const EXPRESSION: Record<string, Expression> = {
 
 export default function EntryScreen() {
   const c = useColors();
-  const { id, fresh, drops } = useLocalSearchParams<{ id: string; fresh?: string; drops?: string }>();
+  const { id, fresh, gained } = useLocalSearchParams<{ id: string; fresh?: string; gained?: string }>();
   const { settings } = useSettings();
   const [entry, setEntry] = useState<StoredEntry | null>(null);
   const [reaction, setReaction] = useState<StoredReaction | null>(null);
@@ -43,10 +44,12 @@ export default function EntryScreen() {
         const e = await getEntry(id);
         setEntry(e);
         if (!e) return;
+        // Going back to an old page is part of knowing yourself.
+        if (!fresh && Date.now() - new Date(e.createdAt).getTime() > 7 * 86_400_000) awardBond(['memory']).catch(() => {});
         setReaction(await reactionForEntry(id));
         setPeople(await entitiesForEntry(id));
       })();
-    }, [id]),
+    }, [id, fresh]),
   );
 
   if (!entry) return <Screen><T v="muted">Bu sayfa bulunamadı.</T></Screen>;
@@ -57,7 +60,8 @@ export default function EntryScreen() {
   const canPlay = aiReady(settings) && eligibility.eligible;
   const heartache = eligibility.eligible && eligibility.mode === 'heartache';
   const showReaction = !!reaction && (!!fresh || reaction.kind === 'support' || reaction.kind === 'crisis');
-  const earned = Number(drops ?? 0);
+  const earned = Number(gained ?? 0);
+  const keepsake = keepsakeFor(entry);
 
   const remove = () =>
     Alert.alert('Bu sayfa kalıcı olarak silinsin mi?', 'Sayfa, fotoğrafları ve maskotun ondan hatırladıkları silinir. Bu işlem geri alınamaz.', [
@@ -108,8 +112,8 @@ export default function EntryScreen() {
             <>
               <Gap h={space.s} />
               <Row>
-                <Button label="💬 Konuşalım" small onPress={() => router.push('/chat')} />
-                <Button label="🫁 Birlikte nefes" kind="secondary" small onPress={() => router.push('/breathe')} />
+                <Button label="Konuşalım" small onPress={() => router.push('/chat')} />
+                <Button label="Birlikte nefes" kind="secondary" small onPress={() => router.push('/breathe')} />
               </Row>
             </>
           ) : null}
@@ -122,10 +126,14 @@ export default function EntryScreen() {
         </>
       ) : null}
 
-      {fresh && earned > 0 ? (
+      {fresh ? (
         <>
-          <Card style={{ backgroundColor: c.accentSoft, borderColor: c.accentSoft }}>
-            <T v="body">💧 +{earned} damla kazandın. Ana sayfada su verebilirsin!</T>
+          <Card style={{ backgroundColor: c.accentSoft, borderColor: c.accentSoft, flexDirection: 'row', alignItems: 'center', gap: space.m }}>
+            <T v="body" style={{ fontSize: 30, lineHeight: 36 }}>{keepsake.glyph}</T>
+            <View style={{ flex: 1 }}>
+              <T v="heading">Rafına yeni bir anı eklendi</T>
+              <T v="small">{keepsake.label}{earned > 0 ? ` · bağınız +${earned}` : ''}</T>
+            </View>
           </Card>
           <Gap />
         </>
@@ -167,7 +175,7 @@ export default function EntryScreen() {
         <>
           <Gap h={space.l} />
           <Card style={{ gap: space.s }}>
-            <T v="heading">{heartache ? '🌗 Ya başka türlü olsaydı?' : '🎲 Alternatif senaryo'}</T>
+            <T v="heading">{heartache ? 'Ya başka türlü olsaydı?' : 'Alternatif senaryo'}</T>
             {scenario ? (
               <>
                 <T v="serif">{scenario}</T>

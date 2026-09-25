@@ -49,7 +49,7 @@ export function WritingBuddy({ text, mood }: { text: string; mood: Mood | null }
         Haptics.selectionAsync().catch(() => {});
       }
     };
-    cross(60, 'Uzun sayfa! Bu sayfa +1 damla daha kazandırır. 💧');
+    cross(80, 'Derinden yazıyorsun. Bu sayfa bağımızı daha da güçlendirecek.');
     cross(150, 'Nasıl da akıyor… Okumaya bayılıyorum. 💗');
     cross(300, 'Vay! Bugün anlatacak çok şey var. Buradayım.');
   }, [words]);
@@ -74,7 +74,7 @@ export function WritingBuddy({ text, mood }: { text: string; mood: Mood | null }
         onPress={() => setSay(`Takıldıysan: ${HINTS[Math.floor(Math.random() * HINTS.length)]}`)}
         accessibilityRole="button"
         accessibilityLabel="Maskottan bir soru iste">
-        <Mascot size={54} expression={expression} stage={info.index} aged={info.aged} />
+        <Mascot size={54} expression={expression} look={info.look} />
       </Pressable>
     </View>
   );

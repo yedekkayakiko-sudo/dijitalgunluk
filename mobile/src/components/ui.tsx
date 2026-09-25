@@ -24,8 +24,8 @@ type Variant = 'title' | 'heading' | 'body' | 'muted' | 'small' | 'serif';
 export function T({ children, v = 'body', style, numberOfLines }: { children: ReactNode; v?: Variant; style?: StyleProp<TextStyle>; numberOfLines?: number }) {
   const c = useColors();
   const base: Record<Variant, TextStyle> = {
-    title: { fontFamily: serif, fontSize: 28, lineHeight: 34, color: c.text, fontWeight: '600' },
-    heading: { fontSize: 17, lineHeight: 22, color: c.text, fontWeight: '700' },
+    title: { fontFamily: serif, fontSize: 28, lineHeight: 34, color: c.text, fontWeight: '600', letterSpacing: -0.3 },
+    heading: { fontSize: 17, lineHeight: 22, color: c.text, fontWeight: '600' },
     body: { fontSize: 16, lineHeight: 23, color: c.text },
     serif: { fontFamily: serif, fontSize: 17, lineHeight: 26, color: c.text },
     muted: { fontSize: 15, lineHeight: 21, color: c.muted },
@@ -66,7 +66,7 @@ export function Button({
         { backgroundColor: bg, opacity: disabled ? 0.45 : pressed ? 0.8 : 1 },
         style,
       ]}>
-      <Text style={{ color: fg, fontWeight: '700', fontSize: small ? 14 : 16 }}>{label}</Text>
+      <Text style={{ color: fg, fontWeight: '600', fontSize: small ? 14 : 16 }}>{label}</Text>
     </Pressable>
   );
 }
@@ -93,8 +93,24 @@ export function Gap({ h = space.m }: { h?: number }) {
 }
 
 const styles = StyleSheet.create({
-  card: { borderRadius: 18, borderWidth: StyleSheet.hairlineWidth, padding: space.m },
-  button: { borderRadius: 14, paddingVertical: 14, paddingHorizontal: 20, alignItems: 'center', justifyContent: 'center' },
-  buttonSmall: { paddingVertical: 9, paddingHorizontal: 14, borderRadius: 12 },
+  card: { borderRadius: 16, borderWidth: StyleSheet.hairlineWidth, padding: space.m },
+  button: { borderRadius: 12, paddingVertical: 14, paddingHorizontal: 20, alignItems: 'center', justifyContent: 'center' },
+  buttonSmall: { paddingVertical: 9, paddingHorizontal: 14, borderRadius: 10 },
   chip: { borderRadius: 999, borderWidth: 1, paddingVertical: 7, paddingHorizontal: 13 },
 });
+
+/** A thin progress line. */
+export function Progress({ value, color, height = 6 }: { value: number; color?: string; height?: number }) {
+  const c = useColors();
+  return (
+    <View style={{ height, borderRadius: height / 2, backgroundColor: c.sunken, overflow: 'hidden' }}>
+      <View style={{ width: `${Math.round(Math.max(0, Math.min(1, value)) * 100)}%`, height, backgroundColor: color ?? c.accent }} />
+    </View>
+  );
+}
+
+/** Small uppercase-ish label above a section. */
+export function Label({ children, style }: { children: ReactNode; style?: StyleProp<TextStyle> }) {
+  const c = useColors();
+  return <Text style={[{ color: c.muted, fontSize: 12, fontWeight: '600', letterSpacing: 0.6, textTransform: 'uppercase' }, style]}>{children}</Text>;
+}

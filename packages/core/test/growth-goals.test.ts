@@ -1,33 +1,55 @@
 import { describe, expect, it } from 'vitest';
 import { dailyPrompt } from '../src/daily';
 import { goalChain, goalPhase, type Goal } from '../src/goals';
-import { ageOf, dropsForEntry, earn, feed, growthFor, INITIAL_PET, isNight, seasonOf } from '../src/growth';
+import { ageOf, award, bondInfo, DAILY_CAP, entryEvents, FORMS, INITIAL_BOND, isNight, levelFor, migrateFromDrops, seasonOf, xpForLevel } from '../src/growth';
 import { consume, remaining } from '../src/quota';
 import { fillName, scrubIdentifiers } from '../src/scrub';
 
-describe('growth', () => {
-  it('moves through stages as drops are fed', () => {
-    expect(growthFor(0).stage.id).toBe('tohum');
-    expect(growthFor(5).stage.id).toBe('filiz');
-    expect(growthFor(450).stage.id).toBe('bilge');
-    expect(growthFor(450).next).toBeNull();
-    expect(growthFor(10).progress).toBeCloseTo(5 / 15);
+describe('bond', () => {
+  it('levels up quickly at first and slowly later', () => {
+    expect(levelFor(0)).toBe(1);
+    expect(levelFor(xpForLevel(2))).toBe(2);
+    expect(xpForLevel(2)).toBeLessThanOrEqual(12 + 15); // the very first page
+    expect(xpForLevel(30)).toBeGreaterThan(4000); // months of real writing
+    expect(bondInfo(0)).toMatchObject({ level: 1, chapter: { name: 'Yeni tanışıyoruz' }, form: { name: 'Minik' } });
+    expect(bondInfo(xpForLevel(30)).maxed).toBe(true);
   });
 
-  it('rewards showing up, a bit more for long pages and photos', () => {
-    expect(dropsForEntry({ kind: 'one_word', text: 'huzurlu', photos: [] })).toBe(1);
-    expect(dropsForEntry({ kind: 'entry', text: 'kısa', photos: ['a.jpg'] })).toBe(2);
-    expect(dropsForEntry({ kind: 'entry', text: 'kelime '.repeat(80), photos: ['a.jpg'] })).toBe(3);
+  it('rewards meaningful moments and caps each day', () => {
+    const at = new Date('2026-03-01T21:00:00');
+    const first = award(INITIAL_BOND, entryEvents({ kind: 'entry', text: 'kelime '.repeat(90), photos: ['a'], mood: 4 }, null), at);
+    expect(first.gained).toBe(12 + 6 + 2 + 2);
+    expect(first.state.bornAt).not.toBeNull();
+    let s = first.state;
+    for (let i = 0; i < 20; i++) s = award(s, ['entry', 'chat', 'breathe'], at).state;
+    expect(s.today).toBeLessThanOrEqual(DAILY_CAP);
+    const nextDay = award(s, ['entry'], new Date('2026-03-02T09:00:00'));
+    expect(nextDay.gained).toBe(12);
+    expect(nextDay.state.today).toBe(12);
   });
 
-  it('feeds one drop at a time and reports growing a stage', () => {
-    let s = earn(INITIAL_PET, 5, '2026-01-01T10:00:00');
-    expect(s.bornAt).toBe('2026-01-01T10:00:00');
-    let grew = false;
-    for (let i = 0; i < 5; i++) ({ state: s, grew } = feed(s, '2026-01-02T10:00:00'));
-    expect(grew).toBe(true);
-    expect(s).toMatchObject({ xp: 5, drops: 0 });
-    expect(feed(s, 'x').state).toBe(s); // nothing to feed
+  it('welcomes people back after quiet days instead of punishing them', () => {
+    expect(entryEvents({ kind: 'entry', text: 'döndüm', photos: [], mood: null }, 6)).toContain('return');
+    expect(entryEvents({ kind: 'one_word', text: 'yorgun', photos: [], mood: 2 }, 1)).toEqual(['one_word', 'feeling']);
+    expect(entryEvents({ kind: 'entry', text: 'ilk', photos: [], mood: null }, null, true)).toEqual(['entry', 'first_page']);
+  });
+
+  it('reports level ups, new forms and unlocked accessories', () => {
+    const near = { ...INITIAL_BOND, xp: xpForLevel(2) - 1 };
+    const r = award(near, ['entry'], new Date('2026-03-01T10:00:00'));
+    expect(r.levelUp).toBe(2);
+    expect(r.newForm?.name).toBe('Filizli');
+    const near3 = { ...INITIAL_BOND, xp: xpForLevel(3) - 1 };
+    expect(award(near3, ['entry'], new Date('2026-03-01T10:00:00')).unlocked.map((a) => a.id)).toEqual(['scarf']);
+  });
+
+  it('keeps growth from the old water drops', () => {
+    const s = migrateFromDrops({ xp: 30, drops: 2, bornAt: '2026-01-01' });
+    expect(s.xp).toBe(288);
+    expect(levelFor(288)).toBeGreaterThan(3);
+    expect(s.bornAt).toBe('2026-01-01');
+    expect(s.seenLevel).toBe(levelFor(288));
+    expect(FORMS).toHaveLength(10);
   });
 
   it('ages with the user', () => {

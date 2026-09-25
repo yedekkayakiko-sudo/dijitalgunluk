@@ -3,6 +3,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { Platform, Share, Text, useColorScheme, View } from 'react-native';
+import { LevelUp } from '@/components/LevelUp';
 import { Mascot } from '@/components/Mascot';
 import { Button } from '@/components/ui';
 import { trackAppOpen } from '@/lib/analytics';
@@ -30,6 +31,7 @@ function Navigator() {
   if (!ready) return null;
 
   return (
+    <>
     <Stack screenOptions={{ headerShadowVisible: false, headerStyle: { backgroundColor: c.bg }, headerTintColor: c.text, contentStyle: { backgroundColor: c.bg } }}>
       <Stack.Protected guard={settings.onboarded}>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
@@ -47,12 +49,16 @@ function Navigator() {
         <Stack.Screen name="kvkk" options={{ title: 'Aydınlatma metni' }} />
         <Stack.Screen name="privacy" options={{ title: 'Gizlilik ve destek' }} />
         <Stack.Screen name="diagnostics" options={{ title: 'Sistem kontrolü' }} />
+        <Stack.Screen name="bond" options={{ title: '' }} />
+        <Stack.Screen name="shelf" options={{ title: 'Anı rafı' }} />
       </Stack.Protected>
       <Stack.Protected guard={!settings.onboarded}>
         <Stack.Screen name="onboarding" options={{ headerShown: false }} />
         <Stack.Screen name="kvkk-intro" options={{ title: 'Aydınlatma metni' }} />
       </Stack.Protected>
     </Stack>
+    {settings.onboarded ? <LevelUp /> : null}
+    </>
   );
 }
 

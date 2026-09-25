@@ -149,7 +149,7 @@ export default function Write() {
       await clearDraft();
       const r = await afterSave(entry, !editingId).catch(() => null);
       await refreshPet();
-      router.replace(`/entry/${entry.id}?fresh=1&drops=${r?.drops ?? 0}`);
+      router.replace(`/entry/${entry.id}?fresh=1&gained=${r?.gained ?? 0}`);
     } catch {
       setSaving(false);
       Alert.alert('Kaydedilemedi', 'Taslağın güvende. Birazdan tekrar dene.');

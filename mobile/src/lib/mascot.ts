@@ -1,22 +1,22 @@
-import { decideReaction, detectCrisis, extractEntities, isUnlikelyPerson, normalizeKey, type CrisisLevel, type Entry, type EntityMention, type ReactionKind } from '@gunluk/core';
+import { decideReaction, detectCrisis, entryEvents, extractEntities, isUnlikelyPerson, normalizeKey, type CrisisLevel, type Entry, type EntityMention, type ReactionKind } from '@gunluk/core';
 import { track } from './analytics';
 import { aiReady, api } from './api';
 import { addReaction, entitiesForEntry, kvGet, kvSet, linkEntities, listEntities, listEntries, recentReactions, setEmbedding } from './db';
 import { maybeUpdateNotes, noteTexts } from './memory';
-import { rewardEntry } from './pet';
+import { awardBond } from './pet';
 import { readSettings } from './settings';
 
 export interface MascotReply {
   kind: ReactionKind;
   crisisLevel: CrisisLevel;
   text: string | null;
-  /** Water drops earned by this page (new pages only). */
-  drops: number;
+  /** Bond points earned by this page (new pages only). */
+  gained: number;
 }
 
 /**
  * Runs after an entry is saved: crisis check, memory (people, places, notes),
- * search index, the mascot's reaction, and the drops the mascot can be fed.
+ * search index, the mascot's reaction, and the bond points the page brings.
  * Edits never trigger a new reaction or reward, except for crisis language.
  */
 export async function afterSave(entry: Entry, isNew: boolean): Promise<MascotReply> {
@@ -50,11 +50,13 @@ export async function afterSave(entry: Entry, isNew: boolean): Promise<MascotRep
     if (entry.privacy === 'ai_full') maybeUpdateNotes().catch(() => {});
   }
 
-  const drops = isNew ? await rewardEntry(entry) : 0;
+  const previous = recent.find((e) => e.id !== entry.id);
+  const daysSinceLast = previous ? Math.floor((new Date(entry.createdAt).getTime() - new Date(previous.createdAt).getTime()) / 86_400_000) : null;
+  const gained = isNew ? (await awardBond(entryEvents(entry, daysSinceLast, !previous))).gained : 0;
   track('entry_saved', { kind: entry.kind, privacy: entry.privacy, photo: entry.photos.length > 0 });
 
   const speak = decision.kind === 'crisis' || decision.kind === 'support' ? true : isNew && decision.kind !== 'none';
-  if (!speak || !decision.text) return { kind: 'none', crisisLevel: decision.crisisLevel, text: null, drops };
+  if (!speak || !decision.text) return { kind: 'none', crisisLevel: decision.crisisLevel, text: null, gained };
 
   let text = decision.text;
   const notes = await noteTexts();
@@ -67,7 +69,7 @@ export async function afterSave(entry: Entry, isNew: boolean): Promise<MascotRep
   }
   await addReaction({ entryId: entry.id, kind: decision.kind, subject: decision.subject, text, at: new Date().toISOString() });
   track(crisis ? 'support_shown' : 'reaction_shown', { kind: decision.kind });
-  return { kind: decision.kind, crisisLevel: decision.crisisLevel, text, drops };
+  return { kind: decision.kind, crisisLevel: decision.crisisLevel, text, gained };
 }
 
 /** Long heavy stretch: mostly hard moods (or repeated support) over two weeks. Never a diagnosis. */

@@ -15,7 +15,7 @@ const LINES = [
   'Günün küçük bir anını saklamak ister misin?',
   'Buradayım. Bugünü birlikte kapatalım mı?',
   'Bugün seni ne gülümsetti? Merak ettim.',
-  'Bir bardak su, bir sayfa günlük. İkisi de iyi gelir. 💧',
+  'Bir bardak su, bir sayfa günlük. İkisi de iyi gelir.',
   'Sessiz bir gün müydü, dolu dolu mu? Anlatırsan dinlerim.',
 ];
 

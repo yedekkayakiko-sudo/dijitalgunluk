@@ -69,7 +69,7 @@ export default function Chat() {
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <Row style={{ padding: space.m, paddingBottom: space.s, justifyContent: 'space-between', flexWrap: 'nowrap' }}>
           <Row style={{ flexWrap: 'nowrap' }}>
-            <Mascot size={40} stage={info.index} aged={info.aged} breathing={false} />
+            <Mascot size={40} look={info.look} breathing={false} />
             <View>
               <T v="heading">{settings.mascotName}</T>
               <T v="small" style={{ fontSize: 12 }}>{ai ? 'Seni dinliyor' : 'Sayfalarını karıştırabilir'}</T>

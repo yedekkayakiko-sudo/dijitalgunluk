@@ -41,7 +41,7 @@ export function Thinking() {
   return (
     <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: space.s }} accessibilityLabel="Düşünüyor">
       <Animated.View style={{ transform: [{ rotate }] }}>
-        <Mascot size={44} expression="curious" stage={info.index} aged={info.aged} breathing={false} />
+        <Mascot size={44} expression="curious" look={info.look} breathing={false} />
       </Animated.View>
       <View style={{ flexDirection: 'row', gap: 5, backgroundColor: c.card, borderColor: c.border, borderWidth: 1, borderRadius: 16, paddingVertical: 12, paddingHorizontal: 14, marginBottom: 8 }}>
         {dots.map((v, i) => (

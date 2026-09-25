@@ -11,7 +11,7 @@ import { Button, Card, Chip, Gap, Row, Screen, T } from '@/components/ui';
 import { track } from '@/lib/analytics';
 import { addCheckin, addGoal, deleteGoal, listCheckins, listEntries, listGoals, reviewGoal } from '@/lib/db';
 import { scheduleOnDate } from '@/lib/notifications';
-import { grantDrops, usePet } from '@/lib/pet';
+import { awardBond } from '@/lib/pet';
 import { useSettings } from '@/lib/settings';
 import { serif, space, useColors } from '@/theme';
 
@@ -25,7 +25,6 @@ const FEELINGS: { value: GoalCheckin['feeling']; label: string; reply: string }[
 export default function Goals() {
   const c = useColors();
   const { settings } = useSettings();
-  const { refresh } = usePet();
   const [goals, setGoals] = useState<Goal[]>([]);
   const [checkins, setCheckins] = useState<GoalCheckin[]>([]);
   const [related, setRelated] = useState<Record<string, number>>({});
@@ -62,26 +61,27 @@ export default function Goals() {
     await addGoal({ text: text.trim(), why: why.trim() || null, dueAt: due.toISOString(), parentId: composing?.parentId ?? null });
     await scheduleOnDate(due, `${settings.mascotName}: hedefinin günü geldi 🎯`, `“${text.trim()}” nasıl geçti? Birlikte bakalım.`, 'goal');
     track('goal_created', { days, chained: !!composing?.parentId });
+    await awardBond(['goal_set']);
     setComposing(null);
     setText('');
     setWhy('');
-    setSaid('Hedefin mühürlendi. Arada bir nasıl gittiğini soracağım; zamanı gelince birlikte bakarız. 🎯');
+    setSaid('Hedefin mühürlendi. Arada bir nasıl gittiğini soracağım; zamanı gelince birlikte bakarız.');
     load();
   };
 
   const checkIn = async (g: Goal, f: (typeof FEELINGS)[number]) => {
     await addCheckin({ goalId: g.id, at: new Date().toISOString(), feeling: f.value, note: null });
+    await awardBond(['goal_checkin']);
     setSaid(f.reply);
     load();
   };
 
   const review = async (g: Goal, option: (typeof REVIEW_OPTIONS)[number]) => {
     await reviewGoal(g.id, option.status, reflection.trim() || null);
-    await grantDrops(2);
-    await refresh();
+    await awardBond(['goal_review']);
     track('goal_reviewed', { status: option.status });
     setReflection('');
-    setSaid(`${option.reply} (+2 💧)`);
+    setSaid(option.reply);
     load();
   };
 

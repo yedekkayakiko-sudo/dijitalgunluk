@@ -3,7 +3,7 @@ import { Animated, Easing, View } from 'react-native';
 import { Mascot } from '@/components/Mascot';
 import { Button, Gap, Screen, T } from '@/components/ui';
 import { track } from '@/lib/analytics';
-import { usePet } from '@/lib/pet';
+import { awardBond, usePet } from '@/lib/pet';
 import { useSettings } from '@/lib/settings';
 import { space } from '@/theme';
 
@@ -60,6 +60,7 @@ export default function Breathe() {
         setRunning(false);
         setDone(true);
         track('breathing_done');
+        awardBond(['breathe']).catch(() => {});
       }, t),
     );
   };
@@ -71,7 +72,7 @@ export default function Breathe() {
           {running ? PHASES[phase].label : done ? 'Ne güzel yaptın.' : 'Birlikte nefes alalım'}
         </T>
         <Animated.View style={{ transform: [{ scale }] }}>
-          <Mascot size={150} expression={running ? 'caring' : done ? 'happy' : 'idle'} stage={info.index} aged={info.aged} breathing={false} />
+          <Mascot size={150} expression={running ? 'caring' : done ? 'happy' : 'idle'} look={info.look} breathing={false} />
         </Animated.View>
         <T v="muted" style={{ textAlign: 'center' }}>
           {running

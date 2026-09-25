@@ -1,4 +1,4 @@
-import { STAGES } from '@gunluk/core';
+import { FORMS } from '@gunluk/core';
 import { router } from 'expo-router';
 import { useState, type ReactNode } from 'react';
 import { Alert, Switch, TextInput, View } from 'react-native';
@@ -51,23 +51,23 @@ export default function Onboarding() {
     if (ai) track('ai_enabled');
   };
 
-  const steps: { expression: Expression; stage: number; say: string; body: ReactNode; next?: string; canNext?: boolean; onNext?: () => void }[] = [
+  const steps: { expression: Expression; form: number; say: string; body: ReactNode; next?: string; canNext?: boolean; onNext?: () => void }[] = [
     {
       expression: 'happy',
-      stage: 0,
-      say: 'Merhaba! Ben minicik bir tohumum. Sen yazdıkça büyüyeceğim, seni tanıdıkça da senin dostun olacağım.',
+      form: 0,
+      say: 'Merhaba! Ben daha minicik bir yavruyum. Sen yazdıkça büyüyeceğim, seni tanıdıkça da senin dostun olacağım.',
       body: (
         <View style={{ gap: space.m }}>
           <Row style={{ justifyContent: 'space-between', flexWrap: 'nowrap' }}>
-            {[0, 2, 4, 6].map((i) => (
-              <View key={i} style={{ alignItems: 'center' }}>
-                <Mascot size={54} stage={i} breathing={false} expression={i === 6 ? 'happy' : 'idle'} />
-                <T v="small" style={{ fontSize: 11 }}>{STAGES[i].name}</T>
+            {[0, 3, 6, 9].map((i) => (
+              <View key={i} style={{ alignItems: 'center', justifyContent: 'flex-end' }}>
+                <Mascot size={58} look={{ form: i }} breathing={false} dressed={false} expression={i === 9 ? 'happy' : 'idle'} />
+                <T v="small" style={{ fontSize: 11 }}>{FORMS[i].name}</T>
               </View>
             ))}
           </Row>
           <T v="muted">
-            Burası klasik bir not uygulaması değil. Her sayfan bana su olur, ben de büyürüm. Sayfaların sende kalır; ben hatırlamana, zor günlerde yanında olmana ve bazen biraz daha yazmana yardım ederim.
+            Burası klasik bir not uygulaması değil. Seni tanıdıkça büyür, değişir, hatta sana benzerim: gece yazıyorsan gece kuşu olurum, kahveyi seviyorsan elimde bir fincan olur. Sayfaların telefonunda, şifreli kalır; ben hatırlamana, zor günlerde yanında olmana ve dürüst bir dost olmaya bakarım.
           </T>
         </View>
       ),
@@ -75,7 +75,7 @@ export default function Onboarding() {
     },
     {
       expression: 'curious',
-      stage: 1,
+      form: 1,
       say: 'Sana nasıl hitap edeyim? Bir de bana bir isim verir misin?',
       body: (
         <View style={{ gap: space.m }}>
@@ -88,7 +88,7 @@ export default function Onboarding() {
     },
     {
       expression: 'love',
-      stage: 1,
+      form: 1,
       say: 'Seni biraz tanıyayım mı? İstediğini cevapla, istediğini boş bırak. Sadece bu telefonda kalır.',
       body: (
         <View style={{ gap: space.m }}>
@@ -110,13 +110,13 @@ export default function Onboarding() {
     },
     {
       expression: 'idle',
-      stage: 2,
+      form: 2,
       say: 'Nasıl konuşmamı istersin?',
       body: <TonePicker value={settings.tone} onChange={(tone) => update({ tone })} />,
     },
     {
       expression: 'caring',
-      stage: 2,
+      form: 2,
       say: 'Gizliliğin benim için her şeyden önemli.',
       body: (
         <View style={{ gap: space.m }}>
@@ -155,7 +155,7 @@ export default function Onboarding() {
     },
     {
       expression: 'happy',
-      stage: 4,
+      form: 3,
       say: 'Son bir şey: günde bir kez nazikçe hatırlatayım mı? Yazmadığın günler için asla sitem etmem.',
       body: (
         <View style={{ gap: space.m }}>
@@ -181,7 +181,7 @@ export default function Onboarding() {
     <Screen>
       <Gap h={space.l} />
       <View style={{ alignItems: 'center' }}>
-        <Mascot size={130} expression={s.expression} stage={s.stage} />
+        <Mascot size={130} expression={s.expression} look={{ form: s.form }} />
       </View>
       <Gap />
       <MascotBubble text={s.say} showMascot={false} />

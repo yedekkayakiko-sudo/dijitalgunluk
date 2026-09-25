@@ -84,7 +84,7 @@ export default function SettingsScreen() {
       <Field label="Maskotunun adı" value={settings.mascotName} onChange={(mascotName) => update({ mascotName })} />
       <Gap />
       <Row style={{ flexWrap: 'nowrap' }}>
-        <Mascot size={56} stage={info.index} aged={info.aged} />
+        <Mascot size={56} look={info.look} />
         <T v="heading" style={{ flex: 1 }}>Konuşma tonu</T>
       </Row>
       <Gap h={space.s} />

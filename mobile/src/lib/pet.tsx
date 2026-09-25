@@ -1,70 +1,103 @@
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
-import { ageOf, dropsForEntry, earn, feed, growthFor, INITIAL_PET, type Entry, type PetState } from '@gunluk/core';
-import { kvGet, kvSet } from './db';
+import {
+  ageOf, award, bondInfo, INITIAL_BOND, levelFor, migrateFromDrops, traitsFor,
+  type Accessory, type Award, type BondEvent, type BondState, type Trait,
+} from '@gunluk/core';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import type { MascotLook } from '@/components/Mascot';
+import { kvGet, kvSet, listEntities, listEntries } from './db';
 
-/* The mascot's growth state lives on the device, next to the diary. */
+/*
+ * The bond with the mascot lives on the device, next to the diary. Any screen
+ * can award a moment (a page, a goal check-in, a breath together); every
+ * mascot on screen follows along.
+ */
 
-const KEY = 'pet';
+const KEY = 'bond';
+const listeners = new Set<(s: BondState) => void>();
 
-export async function loadPet(): Promise<PetState> {
+export async function loadBond(): Promise<BondState> {
   const raw = await kvGet(KEY);
-  return raw ? { ...INITIAL_PET, ...(JSON.parse(raw) as Partial<PetState>) } : INITIAL_PET;
-}
-
-async function save(s: PetState): Promise<PetState> {
+  if (raw) return { ...INITIAL_BOND, ...(JSON.parse(raw) as Partial<BondState>) };
+  // Coming from v0.3's water drops: keep every bit of growth.
+  const old = await kvGet('pet');
+  const s = old ? migrateFromDrops(JSON.parse(old)) : INITIAL_BOND;
   await kvSet(KEY, JSON.stringify(s));
   return s;
 }
 
-/** Called once per newly saved page. */
-export async function rewardEntry(entry: Pick<Entry, 'kind' | 'text' | 'photos' | 'createdAt'>): Promise<number> {
-  const amount = dropsForEntry(entry);
-  await save(earn(await loadPet(), amount, entry.createdAt));
-  return amount;
+async function save(s: BondState): Promise<BondState> {
+  await kvSet(KEY, JSON.stringify(s));
+  listeners.forEach((l) => l(s));
+  return s;
 }
 
-/** Small rewards for other good moments (reviewing a goal, finishing a breathing round…). */
-export async function grantDrops(amount: number): Promise<void> {
-  await save(earn(await loadPet(), amount, new Date().toISOString()));
-}
-
-export async function feedOne(): Promise<{ state: PetState; grew: boolean }> {
-  const r = feed(await loadPet(), new Date().toISOString());
+/** Records meaningful moments. Returns what was gained, and any level up. */
+export async function awardBond(events: BondEvent[]): Promise<Award> {
+  const r = award(await loadBond(), events);
   await save(r.state);
   return r;
 }
 
-export function describePet(s: PetState, now = new Date()) {
-  const g = growthFor(s.xp);
-  const age = ageOf(s.bornAt, now);
-  return { ...g, age, aged: (age?.years ?? 0) >= 1 };
+export async function setAccessory(id: Accessory['id']): Promise<void> {
+  await save({ ...(await loadBond()), accessory: id });
 }
 
-// ---------- React context: every mascot on screen shows the current stage ----------
+async function ackLevel(level: number): Promise<void> {
+  const s = await loadBond();
+  if (level > s.seenLevel) await save({ ...s, seenLevel: level });
+}
 
+export function describeBond(s: BondState, traits: Trait[], now = new Date()) {
+  const info = bondInfo(s.xp);
+  const age = ageOf(s.bornAt, now);
+  const aged = (age?.years ?? 0) >= 1;
+  const look: MascotLook = { form: info.form.id, accessory: s.accessory, prop: traits[0]?.glyph ?? null, aged };
+  return { ...info, age, aged, look };
+}
+
+async function loadAll(): Promise<{ bond: BondState; traits: Trait[] }> {
+  const [bond, entries, people, places] = await Promise.all([loadBond(), listEntries({ limit: 60 }), listEntities('person'), listEntities('place')]);
+  return { bond, traits: traitsFor({ entries, distinctPeople: people.length, distinctPlaces: places.length }) };
+}
+
+// ---------- React context ----------
 
 interface PetCtx {
-  pet: PetState;
-  info: ReturnType<typeof describePet>;
+  bond: BondState;
+  traits: Trait[];
+  info: ReturnType<typeof describeBond>;
+  /** Reloads the bond and recomputes traits from the diary. */
   refresh: () => Promise<void>;
-  /** Feeds one drop; returns whether the mascot reached a new stage. */
-  feedDrop: () => Promise<boolean>;
+  /** A level the user has not seen celebrated yet. */
+  pendingLevel: number | null;
+  ackLevel: (level: number) => Promise<void>;
 }
 
 const PetContext = createContext<PetCtx | null>(null);
 
 export function PetProvider({ children }: { children: ReactNode }) {
-  const [pet, setPet] = useState<PetState>(INITIAL_PET);
-  const refresh = useCallback(async () => setPet(await loadPet()), []);
+  const [bond, setBond] = useState<BondState>(INITIAL_BOND);
+  const [traits, setTraits] = useState<Trait[]>([]);
+
+  const apply = useCallback((r: Awaited<ReturnType<typeof loadAll>>) => {
+    setBond(r.bond);
+    setTraits(r.traits);
+  }, []);
+  const refresh = useCallback(() => loadAll().then(apply), [apply]);
+
   useEffect(() => {
-    loadPet().then(setPet);
-  }, []);
-  const feedDrop = useCallback(async () => {
-    const r = await feedOne();
-    setPet(r.state);
-    return r.grew;
-  }, []);
-  return <PetContext.Provider value={{ pet, info: describePet(pet), refresh, feedDrop }}>{children}</PetContext.Provider>;
+    loadAll().then(apply).catch(() => {});
+    listeners.add(setBond);
+    return () => {
+      listeners.delete(setBond);
+    };
+  }, [apply]);
+
+  const info = useMemo(() => describeBond(bond, traits), [bond, traits]);
+  const level = levelFor(bond.xp);
+  const pendingLevel = level > bond.seenLevel ? level : null;
+
+  return <PetContext.Provider value={{ bond, traits, info, refresh, pendingLevel, ackLevel }}>{children}</PetContext.Provider>;
 }
 
 export function usePet(): PetCtx {

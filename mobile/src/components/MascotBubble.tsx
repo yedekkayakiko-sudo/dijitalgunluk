@@ -13,7 +13,7 @@ export function MascotBubble({
   const { info } = usePet();
   return (
     <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: space.s }}>
-      {showMascot ? <Mascot size={size} expression={expression} stage={info.index} aged={info.aged} /> : null}
+      {showMascot ? <Mascot size={size} expression={expression} look={info.look} /> : null}
       <View style={{ flex: 1, marginBottom: showMascot ? size * 0.35 : 0 }}>
         <View style={{ backgroundColor: c.card, borderColor: c.border, borderWidth: 1, borderRadius: 18, borderBottomLeftRadius: 4, padding: space.m }}>
           {name ? <T v="small" style={{ marginBottom: 2, fontWeight: '700' }}>{name}</T> : null}

@@ -7,6 +7,7 @@ import { Button, Card, Chip, Gap, Row, Screen, T } from '@/components/ui';
 import { track } from '@/lib/analytics';
 import { addLetter, deleteLetter, listLetters, markLetterOpened } from '@/lib/db';
 import { scheduleOnDate } from '@/lib/notifications';
+import { awardBond } from '@/lib/pet';
 import { serif, space, useColors } from '@/theme';
 
 export default function Letters() {
@@ -27,6 +28,7 @@ export default function Letters() {
     await addLetter(openDateFor(months).toISOString(), body.trim());
     await scheduleOnDate(openDateFor(months), 'Geçmişten bir mektubun var ✉️', 'Kendine yazdığın mektubun açılma zamanı geldi.', 'letter');
     track('letter_written', { months });
+    await awardBond(['letter']);
     setBody('');
     setWriting(false);
     load();

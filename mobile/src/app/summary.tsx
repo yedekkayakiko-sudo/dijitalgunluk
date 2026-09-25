@@ -84,7 +84,7 @@ export default function Summary() {
       </Row>
       <Gap />
       <Card style={{ gap: space.m, backgroundColor: c.sunken }}>
-        <Mascot size={64} expression="happy" stage={info.index} aged={info.aged} />
+        <Mascot size={64} expression="happy" look={info.look} />
         {loading && !letter ? <ActivityIndicator color={c.accent} /> : <T v="serif">{letter}</T>}
         <T v="small" style={{ textAlign: 'right' }}>— {settings.mascotName}</T>
         {aiUsed ? <Button label="⚑ Bildir" kind="ghost" small style={{ alignSelf: 'flex-end' }} onPress={() => reportMascotText(letter)} /> : null}

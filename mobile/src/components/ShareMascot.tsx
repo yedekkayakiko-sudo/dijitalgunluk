@@ -37,15 +37,15 @@ export function ShareMascot({ visible, headline, onClose }: { visible: boolean; 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={{ flex: 1, backgroundColor: '#0009', alignItems: 'center', justifyContent: 'center', padding: space.l, gap: space.m }}>
-        <View ref={card} collapsable={false} style={{ backgroundColor: '#FBF7F0', borderRadius: 28, padding: space.l, alignItems: 'center', gap: space.s, width: 300 }}>
-          <T v="title" style={{ fontFamily: serif, color: '#2B2622', textAlign: 'center', fontSize: 24 }}>{headline}</T>
-          <Mascot size={170} expression="happy" stage={info.index} aged={info.aged} breathing={false} />
-          <T v="heading" style={{ color: '#2B2622' }}>{settings.mascotName}</T>
-          <T v="small" style={{ color: '#7A7069' }}>
-            {info.stage.name}
+        <View ref={card} collapsable={false} style={{ backgroundColor: '#F6F3EE', borderRadius: 28, padding: space.l, alignItems: 'center', gap: space.s, width: 300 }}>
+          <T v="title" style={{ fontFamily: serif, color: '#211E1B', textAlign: 'center', fontSize: 24 }}>{headline}</T>
+          <Mascot size={170} expression="happy" look={info.look} breathing={false} />
+          <T v="heading" style={{ color: '#211E1B' }}>{settings.mascotName}</T>
+          <T v="small" style={{ color: '#6E6862' }}>
+            Seviye {info.level} · {info.chapter.name}
             {info.age ? ` · ${info.age.label}` : ''}
           </T>
-          <T v="small" style={{ color: '#7A7069', marginTop: space.s }}>🌱 Pusula Günlük ile büyüyoruz</T>
+          <T v="small" style={{ color: '#6E6862', marginTop: space.s }}>Pusula Günlük ile birlikte büyüyoruz</T>
         </View>
         <View style={{ flexDirection: 'row', gap: space.s }}>
           <Button label={busy ? '…' : 'Paylaş'} onPress={share} disabled={busy} />

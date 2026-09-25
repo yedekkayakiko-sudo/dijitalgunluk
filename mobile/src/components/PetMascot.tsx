@@ -2,29 +2,26 @@ import { Accelerometer } from 'expo-sensors';
 import * as Haptics from 'expo-haptics';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Animated, Easing, Platform, Pressable, Text, View } from 'react-native';
-import { Mascot, type Expression } from './Mascot';
+import { Mascot, type Expression, type MascotLook } from './Mascot';
 
 /*
  * The mascot you can touch: tap to pet it, hold to hug it, shake the phone to
- * make it dizzy, and watch drops fall when you feed it.
+ * make it dizzy.
  */
 
-const PET_LINES = ['Hihi, gıdıklanıyorum!', 'Bir daha! 🌱', 'Seni gördüğüme sevindim.', 'Yapraklarım titredi!', 'Mmm, ne güzel sevdin.'];
+const PET_LINES = ['Hihi, gıdıklanıyorum!', 'Bir daha!', 'Seni gördüğüme sevindim.', 'Kulaklarım titredi!', 'Mmm, ne güzel sevdin.'];
 const HUG_LINES = ['Ben de seni seviyorum.', 'Sarıl bakalım… oh be.', 'Böyle kalalım biraz.'];
-const DIZZY_LINES = ['Başım döndüüü!', 'Deprem mi oldu?!', 'Yapraklarım dökülecek, yavaş!'];
+const DIZZY_LINES = ['Başım döndüüü!', 'Deprem mi oldu?!', 'Yavaş, filizim sallanıyor!'];
 
 type Particle = { id: number; glyph: string; x: number; anim: Animated.Value; fall: boolean };
 
 export function PetMascot({
-  size = 150, stage, aged, baseExpression = 'idle', onSay, feeding,
+  size = 150, look, baseExpression = 'idle', onSay,
 }: {
   size?: number;
-  stage: number;
-  aged: boolean;
+  look: MascotLook;
   baseExpression?: Expression;
   onSay?: (line: string) => void;
-  /** Increment to play the feeding animation. */
-  feeding?: number;
 }) {
   const [expression, setExpression] = useState<Expression | null>(null);
   const [particles, setParticles] = useState<Particle[]>([]);
@@ -96,19 +93,6 @@ export function PetMascot({
     return () => sub.remove();
   }, [burst, onSay, react, wobble]);
 
-  // Feeding animation.
-  useEffect(() => {
-    if (!feeding) return;
-    Haptics.selectionAsync().catch(() => {});
-    burst('💧', 1, true);
-    const t = setTimeout(() => {
-      pop();
-      react('happy', 1000);
-      burst('✨', 2);
-    }, 650);
-    return () => clearTimeout(t);
-  }, [feeding, burst, pop, react]);
-
   useEffect(() => () => {
     if (reset.current) clearTimeout(reset.current);
   }, []);
@@ -119,7 +103,7 @@ export function PetMascot({
     <View style={{ width: size, alignItems: 'center' }}>
       <Pressable onPress={pet} onLongPress={hug} delayLongPress={450} accessibilityRole="button" accessibilityLabel="Maskotu sev" accessibilityHint="Dokun: sev. Basılı tut: sarıl.">
         <Animated.View style={{ transform: [{ scale: bounce }, { rotate }] }}>
-          <Mascot size={size} expression={expression ?? baseExpression} stage={stage} aged={aged} />
+          <Mascot size={size} expression={expression ?? baseExpression} look={look} />
         </Animated.View>
       </Pressable>
       {particles.map((p) => {
