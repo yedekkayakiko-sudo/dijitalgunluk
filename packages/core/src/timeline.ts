@@ -101,3 +101,60 @@ export const MOODS: { value: Mood; emoji: string; label: string }[] = [
   { value: 4, emoji: '🙂', label: 'İyi' },
   { value: 5, emoji: '😄', label: 'Harika' },
 ];
+
+export interface ReminderSlot {
+  at: Date;
+  kind: 'daily' | 'missed';
+}
+
+/**
+ * Local reminder plan, recomputed every time the app opens: one gentle
+ * reminder a day for the next week, then silence, except two "missed you"
+ * notes on days 10 and 21 of an absence. Never more.
+ */
+export function reminderPlan(time: string | null, now: Date = new Date()): ReminderSlot[] {
+  if (!time) return [];
+  const [h, m] = time.split(':').map(Number);
+  const at = (days: number) => new Date(now.getFullYear(), now.getMonth(), now.getDate() + days, h, m);
+  const slots: ReminderSlot[] = [];
+  for (let i = 0; i < 7; i++) if (at(i) > now) slots.push({ at: at(i), kind: 'daily' });
+  slots.push({ at: at(10), kind: 'missed' }, { at: at(21), kind: 'missed' });
+  return slots;
+}
+
+export interface MemoryCallback<E> {
+  entry: E;
+  /** "1 ay önce", "1 yıl önce"… */
+  label: string;
+  snippet: string;
+}
+
+const CALLBACK_AGES: [number, string][] = [
+  [365, '1 yıl önce'],
+  [180, '6 ay önce'],
+  [90, '3 ay önce'],
+  [30, '1 ay önce'],
+];
+
+/**
+ * "Hatırlıyor musun?": picks a page from about a month, three months, six
+ * months or a year ago (±3 days), preferring warm, longer pages. Pages the
+ * caller passes must already exclude private and crisis entries.
+ */
+export function pickMemoryCallback<E extends Pick<Entry, 'createdAt' | 'text' | 'mood' | 'kind'>>(entries: E[], now: Date = new Date()): MemoryCallback<E> | null {
+  const DAY = 86_400_000;
+  for (const [days, label] of CALLBACK_AGES) {
+    const center = now.getTime() - days * DAY;
+    const candidates = entries
+      .filter((e) => e.kind === 'entry' && Math.abs(new Date(e.createdAt).getTime() - center) <= 3 * DAY && e.text.split(/\s+/).length >= 8)
+      .filter((e) => e.mood == null || e.mood >= 3)
+      .sort((a, b) => b.text.length - a.text.length);
+    const pick = candidates[0];
+    if (pick) {
+      const first = pick.text.split(/[.!?…]\s/)[0] ?? pick.text;
+      const snippet = first.length > 110 ? `${first.slice(0, 107).trimEnd()}…` : first;
+      return { entry: pick, label, snippet };
+    }
+  }
+  return null;
+}

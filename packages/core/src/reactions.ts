@@ -53,7 +53,7 @@ export interface ReactionDecision {
   themes: string[];
 }
 
-type Templated = 'short_streak' | 'new_person' | 'recurring_theme' | 'support' | 'celebrate';
+type Templated = 'short_streak' | 'new_person' | 'recurring_theme' | 'support' | 'celebrate' | 'welcome';
 
 const TEMPLATES: Record<Templated, Record<MascotTone, string[]>> = {
   short_streak: {
@@ -90,6 +90,11 @@ const TEMPLATES: Record<Templated, Record<MascotTone, string[]>> = {
       'Bugün kolay değilmiş. İyi ki yazdın. Konuşmak istersen hemen buradayım.',
     ],
     minimal: ['Zor bir gün. Buradayım.'],
+  },
+  welcome: {
+    calm: ['İlk sayfan! Bunu, birlikte biriktireceğimiz her şeyin başlangıcı olarak saklıyorum. Hoş geldin. 🌱'],
+    energetic: ['İlk sayfaaa! 🎉 Bu anı hiç unutmayacağım. Hadi birlikte büyüyelim!'],
+    minimal: ['İlk sayfa. Saklandı. 🌱'],
   },
   celebrate: {
     calm: ['Bu sayfadan mutluluk taşıyor. Bu anı sakladığın için sevindim.', 'Ne güzel bir gün! Bunu ileride okuduğunda da gülümseyeceksin.'],
@@ -141,7 +146,14 @@ export function decideReaction(input: ReactionInput): ReactionDecision {
     return reply(crisis.level === 'acute' ? 'crisis' : 'support', CRISIS_TEXT[crisis.level], { crisisLevel: crisis.level });
   }
 
-  // 2. Privacy: only "full analysis" entries are analysed any further.
+  // 2. The very first page always gets a warm welcome: the first "it knows me" moment.
+  const firstPage = input.recent.length === 0 && input.pastReactions.length === 0;
+  if (firstPage) {
+    const welcome = pick(TEMPLATES.welcome[tone], random);
+    return reply('welcome', welcome, analysable ? { mentions: extractEntities(entry.text, input.knownEntities), themes: extractThemes(entry.text) } : {});
+  }
+
+  // 3. Privacy: only "full analysis" entries are analysed any further.
   if (!analysable) return reply('none', null);
 
   const mentions = extractEntities(entry.text, input.knownEntities);
@@ -152,13 +164,13 @@ export function decideReaction(input: ReactionInput): ReactionDecision {
   const templated = (kind: Templated, subject: string | null = null): ReactionDecision =>
     reply(kind, pick(TEMPLATES[kind][tone], random).replace('{s}', subject ?? ''), { ...base, subject });
 
-  // 3. A clearly hard day: a friend notices, even if we talked recently.
+  // 4. A clearly hard day: a friend notices, even if we talked recently.
   const feel = emotionalTone(entry.text);
   if (feel.negative >= 0.45 && !reactedRecently(input.pastReactions, now, SUPPORT_COOLDOWN, ['support', 'crisis']) && roll(0.75)) {
     return templated('support');
   }
 
-  // 4. Light reactions are rate-limited so the mascot never feels chatty.
+  // 5. Light reactions are rate-limited so the mascot never feels chatty.
   if (reactedRecently(input.pastReactions, now, COOLDOWN[tone])) return reply('none', null, base);
 
   const windowed = input.recent.filter((e) => now - new Date(e.createdAt).getTime() < 10 * DAY);

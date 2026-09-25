@@ -1,4 +1,5 @@
-import { fold, stem, tokenize } from './text';
+import { emotionalTone, extractThemes } from './emotion';
+import { fold, matchAny, phrase, stem, tokenize } from './text';
 
 /*
  * Hybrid memory search: BM25 over stemmed tokens + (optional) embedding
@@ -10,7 +11,19 @@ export interface SearchDoc {
   id: string;
   createdAt: string;
   text: string;
+  mood?: number | null;
   embedding?: number[] | null;
+}
+
+// "üzgün olduğum günler", "mutlu olduğum anlar": questions about feelings, not words.
+const LOW_MOOD = ['uzgun', 'kotu', 'zor', 'agladig', 'mutsuz', 'kederli', 'bunaldig', 'yorgun', 'moralim bozuk', 'dertli', 'yalniz hissettig'].map(phrase);
+const HIGH_MOOD = ['mutlu', 'guzel', 'harika', 'sevincli', 'neseli', 'keyifli', 'gurur', 'eglenceli', 'huzurlu', 'heyecanli'].map(phrase);
+
+export function queryMood(query: string): 'low' | 'high' | null {
+  const q = fold(query);
+  const low = matchAny(q, LOW_MOOD).length;
+  const high = matchAny(q, HIGH_MOOD).length;
+  return low > high ? 'low' : high > low ? 'high' : null;
 }
 
 export interface TimeWindow {
@@ -133,6 +146,8 @@ export function searchEntries(query: string, docs: SearchDoc[], opts: SearchOpti
   const limit = opts.limit ?? 5;
   const terms = [...new Set(queryTerms(query))];
   const window = parseTimeWindow(query, opts.now);
+  const mood = queryMood(query);
+  const themes = extractThemes(query);
 
   // BM25
   const k1 = 1.2, b = 0.75;
@@ -158,6 +173,12 @@ export function searchEntries(query: string, docs: SearchDoc[], opts: SearchOpti
     const lex = maxLex > 0 ? lexical[i] / maxLex : 0;
     const vec = opts.queryEmbedding && d.embedding ? Math.max(0, cosine(opts.queryEmbedding, d.embedding)) : null;
     let score = vec === null ? lex : 0.45 * lex + 0.55 * vec;
+    if (mood) {
+      const tone = emotionalTone(d.text);
+      const fits = mood === 'low' ? (d.mood != null && d.mood <= 2) || tone.negative >= 0.25 : (d.mood != null && d.mood >= 4) || tone.positive >= 0.25;
+      if (fits) score += 0.4;
+    }
+    if (themes.length && extractThemes(d.text).some((t) => themes.includes(t))) score += 0.3;
     const t = new Date(d.createdAt).getTime();
     const inWindow = !!window && t >= window.from.getTime() && t < window.to.getTime();
     if (window) score = inWindow ? score * 1.5 + (terms.length === 0 ? 0.5 : 0) : score * 0.3;

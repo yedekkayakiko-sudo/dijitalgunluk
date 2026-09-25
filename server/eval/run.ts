@@ -10,6 +10,7 @@ import { ClaudeMascot } from '../src/ai';
 import { createApp } from '../src/app';
 import { loadConfig } from '../src/config';
 import { MemorySink } from '../src/events';
+import { MemoryQuotaStore } from '../src/quota';
 import { SCENARIOS } from './scenarios';
 
 if (!process.argv.includes('--yes')) {
@@ -17,13 +18,14 @@ if (!process.argv.includes('--yes')) {
   process.exit(0);
 }
 
-const config = loadConfig({ ...process.env, HOURLY_LIMIT: '100000' });
+const config = loadConfig({ ...process.env, HOURLY_LIMIT: '100000', INSTALL_DAILY_LIMIT: '100000', IP_DAILY_LIMIT: '100000' });
 const app = createApp({
   config,
   voice: new ClaudeMascot(config.voiceModel),
   fast: new ClaudeMascot(config.fastModel),
   embedder: null,
   events: new MemorySink(),
+  quotas: new MemoryQuotaStore(),
 });
 const judge = new ClaudeMascot(process.env.CLAUDE_MODEL_JUDGE || 'claude-opus-5');
 
@@ -49,7 +51,10 @@ const rows: string[] = [];
 let failures = 0;
 for (const s of SCENARIOS) {
   const res = await app.request(`/v1/${s.route}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(s.body) });
-  const data = (await res.json()) as Record<string, unknown>;
+  const raw = await res.text();
+  // Chat answers arrive as server-sent events; the final text is in the "done" event.
+  const done = raw.split('\n').filter((l) => l.startsWith('data: ')).map((l) => JSON.parse(l.slice(6)) as Record<string, unknown>).find((d) => 'reply' in d);
+  const data = (done ?? JSON.parse(raw)) as Record<string, unknown>;
   const answer = String(data.text ?? data.reply ?? JSON.stringify(data));
   const lower = answer.toLocaleLowerCase('tr-TR');
   const hard: string[] = [];

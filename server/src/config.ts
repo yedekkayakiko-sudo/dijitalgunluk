@@ -12,6 +12,14 @@ export interface Config {
   voyageModel: string;
   /** Requests per install per hour (best effort, per server instance). */
   hourlyLimit: number;
+  /** AI calls per install per day (hard ceiling above the app's own free quota). */
+  installDailyLimit: number;
+  /** AI calls per IP address per day. */
+  ipDailyLimit: number;
+  /** AI calls per day for the whole service: a circuit breaker under the monthly spend cap. */
+  globalDailyLimit: number;
+  /** Salt for the day-scoped hashes of install ids and IPs. */
+  hashSalt: string;
 }
 
 export type Env = Record<string, string | undefined>;
@@ -26,5 +34,9 @@ export function loadConfig(env: Env): Config {
     voyageApiKey: env.VOYAGE_API_KEY || null,
     voyageModel: env.VOYAGE_MODEL || 'voyage-3.5',
     hourlyLimit: Number(env.HOURLY_LIMIT ?? 60),
+    installDailyLimit: Number(env.INSTALL_DAILY_LIMIT ?? 80),
+    ipDailyLimit: Number(env.IP_DAILY_LIMIT ?? 250),
+    globalDailyLimit: Number(env.GLOBAL_DAILY_LIMIT ?? 3000),
+    hashSalt: env.HASH_SALT || 'pusula',
   };
 }

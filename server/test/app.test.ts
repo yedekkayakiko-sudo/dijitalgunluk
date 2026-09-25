@@ -3,19 +3,41 @@ import type { Mascot, TextRequest } from '../src/ai';
 import { createApp } from '../src/app';
 import { loadConfig } from '../src/config';
 import { MemorySink } from '../src/events';
+import { MemoryQuotaStore } from '../src/quota';
 
 type FakeMascot = Record<string, unknown>;
 
 function setup(over: { voice?: FakeMascot | null; fast?: FakeMascot | null; env?: Record<string, string> } = {}) {
   const make = (m: FakeMascot | null | undefined) =>
-    m === null ? null : ({ text: vi.fn(async () => 'Zeynep ile tanışmanız nasıl oldu?'), json: vi.fn(async () => null), ...m } as unknown as Mascot & { text: ReturnType<typeof vi.fn>; json: ReturnType<typeof vi.fn> });
+    m === null
+      ? null
+      : ({
+          text: vi.fn(async () => 'Zeynep ile tanışmanız nasıl oldu?'),
+          json: vi.fn(async () => null),
+          stream: vi.fn(async (_req: TextRequest, onText: (d: string) => void) => {
+            onText('Anlattığın için ');
+            onText('teşekkürler.\n⟦sayfalar: ; ');
+            onText('risk: yok⟧');
+            return 'Anlattığın için teşekkürler.\n⟦sayfalar: ; risk: yok⟧';
+          }),
+          ...m,
+        } as unknown as Mascot & { text: ReturnType<typeof vi.fn>; json: ReturnType<typeof vi.fn>; stream: ReturnType<typeof vi.fn> });
   const voice = make(over.voice);
   const fast = make(over.fast);
   const events = new MemorySink();
-  const app = createApp({ config: loadConfig({ HOURLY_LIMIT: '5', ADMIN_KEY: 'admin', ...over.env }), voice, fast, embedder: null, events });
+  const app = createApp({ config: loadConfig({ HOURLY_LIMIT: '5', ADMIN_KEY: 'admin', ...over.env }), voice, fast, embedder: null, events, quotas: new MemoryQuotaStore() });
   const post = (path: string, body: unknown, headers: Record<string, string> = {}) =>
     app.request(path, { method: 'POST', headers: { 'content-type': 'application/json', ...headers }, body: JSON.stringify(body) });
   return { app, post, voice, fast, events };
+}
+
+/** Reads a server-sent event stream into its `delta` texts and the final `done` payload. */
+async function readSSE(res: Response) {
+  const events = (await res.text())
+    .split('\n\n')
+    .filter(Boolean)
+    .map((block) => ({ event: /event: (\w+)/.exec(block)?.[1], data: JSON.parse(/data: (.*)/.exec(block)?.[1] ?? 'null') }));
+  return { deltas: events.filter((e) => e.event === 'delta').map((e) => e.data.t as string), done: events.find((e) => e.event === 'done')?.data };
 }
 
 const lastTask = (fn: unknown) => ((fn as { mock: { calls: unknown[][] } }).mock.calls.at(-1)![0] as TextRequest).task;
@@ -52,24 +74,68 @@ describe('/v1/reaction', () => {
 
 describe('/v1/chat', () => {
   const chat = (content: string) => ({ messages: [{ role: 'user', content }], pages: [{ id: 'a', date: '2 Ekim 2023', text: 'Emre ile tanıştım' }] });
-
-  it('keeps only page ids that were actually provided', async () => {
-    const { post } = setup({ voice: { json: vi.fn(async () => ({ reply: '2 Ekim 2023’te Emre ile tanışmıştın.', used_page_ids: ['a', 'zzz'] })) } });
-    const res = await (await post('/v1/chat', chat('3 yıl önce tanıştığım çocuk kimdi?'))).json();
-    expect(res).toMatchObject({ usedPageIds: ['a'], crisis: 'none', source: 'ai' });
+  const streaming = (full: string) => ({
+    stream: vi.fn(async (_r: TextRequest, onText: (d: string) => void) => {
+      for (const part of full.match(/.{1,7}/gs) ?? []) onText(part);
+      return full;
+    }),
   });
 
-  it('stays in the conversation during a crisis and flags it for the app', async () => {
-    const { post, voice } = setup({ voice: { json: vi.fn(async () => ({ reply: 'Buradayım. Güvende misin?', used_page_ids: [] })) } });
-    const res = await (await post('/v1/chat', chat('bazen kendimi öldürmek istiyorum'))).json();
-    expect(res).toMatchObject({ reply: 'Buradayım. Güvende misin?', crisis: 'acute' });
-    expect(lastTask(voice!.json)).toContain('KRİZ NOTU');
+  it('streams the reply and never shows the hidden tag', async () => {
+    const { post } = setup();
+    const { deltas, done } = await readSSE(await post('/v1/chat', chat('selam')));
+    expect(deltas.join('')).toBe('Anlattığın için teşekkürler.\n');
+    expect(done).toEqual({ reply: 'Anlattığın için teşekkürler.', usedPageIds: [], crisis: 'none', source: 'ai' });
+  });
+
+  it('keeps only page ids that were actually provided', async () => {
+    const { post } = setup({ voice: streaming('2 Ekim 2023’te Emre ile tanışmıştın.\n⟦sayfalar: a, zzz; risk: yok⟧') });
+    const { done } = await readSSE(await post('/v1/chat', chat('3 yıl önce tanıştığım çocuk kimdi?')));
+    expect(done.usedPageIds).toEqual(['a']);
+  });
+
+  it('flags crisis from keywords and turns on the protocol', async () => {
+    const { post, voice } = setup();
+    const { done } = await readSSE(await post('/v1/chat', chat('bazen kendimi öldürmek istiyorum')));
+    expect(done.crisis).toBe('acute');
+    expect(lastTask(voice!.stream)).toContain('KRİZ NOTU');
+  });
+
+  it('also trusts the model when it spots risk the keywords missed', async () => {
+    const { post } = setup({ voice: streaming('Buradayım. Bu söylediğin beni düşündürdü; güvende misin?\n⟦sayfalar: ; risk: kriz⟧') });
+    const { done } = await readSSE(await post('/v1/chat', chat('Eşyalarımı arkadaşlarıma dağıttım, artık gerek kalmadı.')));
+    expect(done.crisis).toBe('acute');
+  });
+
+  it('replaces a reply that slipped into diagnostic language', async () => {
+    const { post } = setup({ voice: streaming('Bence depresyondasın.\n⟦sayfalar: ; risk: yok⟧') });
+    const { done } = await readSSE(await post('/v1/chat', chat('nasılım sence')));
+    expect(done.source).toBe('template');
+    expect(done.reply).not.toContain('depresyon');
   });
 
   it('rejects a conversation that does not end with the user', async () => {
     const { post } = setup();
     const res = await post('/v1/chat', { messages: [{ role: 'user', content: 'selam' }, { role: 'assistant', content: 'merhaba' }] });
     expect(res.status).toBe(400);
+  });
+});
+
+describe('daily ceilings', () => {
+  it('stops an install after its daily AI limit, but never for crisis messages', async () => {
+    const { post } = setup({ env: { INSTALL_DAILY_LIMIT: '2', HOURLY_LIMIT: '100' } });
+    const h = { 'x-install-id': 'abc' };
+    expect((await post('/v1/extract', { text: 'x' }, h)).status).toBe(200);
+    expect((await post('/v1/extract', { text: 'x' }, h)).status).toBe(200);
+    expect((await post('/v1/extract', { text: 'x' }, h)).status).toBe(429);
+    const crisis = await post('/v1/chat', { messages: [{ role: 'user', content: 'yaşamak istemiyorum' }] }, h);
+    expect(crisis.status).toBe(200);
+  });
+
+  it('has a global circuit breaker for the whole service', async () => {
+    const { post } = setup({ env: { GLOBAL_DAILY_LIMIT: '1', HOURLY_LIMIT: '100' } });
+    expect((await post('/v1/extract', { text: 'x' }, { 'x-install-id': 'a' })).status).toBe(200);
+    expect((await post('/v1/extract', { text: 'x' }, { 'x-install-id': 'b' })).status).toBe(503);
   });
 });
 

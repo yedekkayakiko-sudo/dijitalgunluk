@@ -11,10 +11,19 @@ database_name = "pusula-events"
 database_id = "00000000-0000-0000-0000-000000000000"
 migrations_dir = "migrations"
 
+# Cloudflare's rate limiter: 30 AI requests per minute per install, enforced at the edge.
+[[ratelimits]]
+name = "LIMITER"
+namespace_id = "1001"
+simple = { limit = 30, period = 60 }
+
 [vars]
 CLAUDE_MODEL_VOICE = "claude-sonnet-5"
 CLAUDE_MODEL_FAST = "claude-haiku-4-5"
 HOURLY_LIMIT = "60"
+INSTALL_DAILY_LIMIT = "80"
+IP_DAILY_LIMIT = "250"
+GLOBAL_DAILY_LIMIT = "3000"
 
 # Secrets (never in this file): npx wrangler secret put ANTHROPIC_API_KEY
-# Optional secrets: APP_KEY, ADMIN_KEY, VOYAGE_API_KEY
+# Optional secrets: APP_KEY, ADMIN_KEY, HASH_SALT, VOYAGE_API_KEY

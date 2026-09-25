@@ -4,11 +4,14 @@ import { createApp } from './app';
 import { loadConfig } from './config';
 import { VoyageEmbedder } from './embeddings';
 import { D1Sink, MemorySink, type D1Like } from './events';
+import { D1QuotaStore, MemoryQuotaStore, type D1QuotaDb } from './quota';
 
 // Cloudflare Workers entry. The free plan comfortably covers the first hundreds of users.
 
 interface WorkerEnv {
-  DB?: D1Like;
+  DB?: D1Like & D1QuotaDb;
+  /** Cloudflare rate limiting binding (see wrangler.toml). */
+  LIMITER?: { limit(opts: { key: string }): Promise<{ success: boolean }> };
   [key: string]: unknown;
 }
 
@@ -24,6 +27,8 @@ function build(env: WorkerEnv) {
     fast: client ? new ClaudeMascot(config.fastModel, client) : null,
     embedder: config.voyageApiKey ? new VoyageEmbedder(config.voyageApiKey, config.voyageModel) : null,
     events: env.DB ? new D1Sink(env.DB) : new MemorySink(),
+    quotas: env.DB ? new D1QuotaStore(env.DB) : new MemoryQuotaStore(),
+    rateLimit: env.LIMITER ? async (key) => (await env.LIMITER!.limit({ key })).success : undefined,
   });
 }
 

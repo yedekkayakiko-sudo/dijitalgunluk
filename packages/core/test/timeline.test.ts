@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { isOpenable, openDateFor, timeUntil } from '../src/letters';
 import { scenarioEligibility } from '../src/scenario';
-import { moodSeries, onThisDay, rhythmMessage, writingRhythm } from '../src/timeline';
+import { moodSeries, onThisDay, pickMemoryCallback, reminderPlan, rhythmMessage, writingRhythm } from '../src/timeline';
 
 const now = new Date('2026-09-25T12:00:00');
 
@@ -65,5 +65,38 @@ describe('scenarioEligibility', () => {
     expect(scenarioEligibility({ text: 'Bana şiddet uyguladı, keşke oraya hiç gitmeseydim.', privacy: 'ai_full' })).toEqual({ eligible: false, reason: 'sensitive' });
     expect(scenarioEligibility({ text: 'Ayrıldık ve artık yaşamak istemiyorum.', privacy: 'ai_full' })).toEqual({ eligible: false, reason: 'sensitive' });
     expect(scenarioEligibility({ text: 'Sabah kahve yerine çay içtim ve otobüse bindim.', privacy: 'ai_read' })).toEqual({ eligible: false, reason: 'privacy' });
+  });
+});
+
+
+describe('reminderPlan', () => {
+  it('reminds daily for a week, then only twice during a long absence', () => {
+    const slots = reminderPlan('21:00', new Date('2026-09-25T12:00:00'));
+    expect(slots.filter((s) => s.kind === 'daily')).toHaveLength(7);
+    expect(slots.filter((s) => s.kind === 'missed').map((s) => s.at.getDate())).toEqual([5, 16]);
+    expect(reminderPlan(null)).toEqual([]);
+  });
+  it('skips today when the time has passed', () => {
+    const slots = reminderPlan('09:00', new Date('2026-09-25T12:00:00'));
+    expect(slots[0].at.getDate()).toBe(26);
+  });
+});
+
+describe('pickMemoryCallback', () => {
+  const now = new Date('2026-09-25T12:00:00');
+  it('brings back a warm page from about a month or a year ago', () => {
+    const pick = pickMemoryCallback(
+      [
+        { createdAt: '2026-08-26T20:00:00', text: 'Zeynep ile sahilde yürüdük, uzun uzun konuştuk ve çok güldük. Sonra dondurma yedik.', mood: 5, kind: 'entry' as const },
+        { createdAt: '2025-09-24T20:00:00', text: 'Yeni işe başladım, heyecanlıyım ama biraz da korkuyorum doğrusu.', mood: 4, kind: 'entry' as const },
+      ],
+      now,
+    )!;
+    expect(pick.label).toBe('1 yıl önce');
+    expect(pick.snippet).toContain('Yeni işe başladım');
+  });
+  it('skips hard days and very short pages', () => {
+    expect(pickMemoryCallback([{ createdAt: '2026-08-26T20:00:00', text: 'Çok kötü bir gündü, hiçbir şey yolunda gitmedi, eve gelip ağladım.', mood: 1, kind: 'entry' as const }], now)).toBeNull();
+    expect(pickMemoryCallback([{ createdAt: '2026-08-26T20:00:00', text: 'iyi', mood: 5, kind: 'entry' as const }], now)).toBeNull();
   });
 });

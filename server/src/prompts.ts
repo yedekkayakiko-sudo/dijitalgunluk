@@ -27,6 +27,19 @@ export function voice(p: Persona): string {
   ].join('\n');
 }
 
+export const MARKER_OPEN = '⟦';
+export const MARKER_CLOSE = '⟧';
+
+/** Parses the trailing tag of a chat reply. */
+export function parseChatTag(full: string): { reply: string; pageIds: string[]; risk: 'yok' | 'endişe' | 'kriz' | null } {
+  const at = full.indexOf(MARKER_OPEN);
+  const reply = (at >= 0 ? full.slice(0, at) : full).trim();
+  const m = full.slice(Math.max(0, at)).match(/sayfalar:\s*([^;⟧]*);\s*risk:\s*(yok|endişe|endise|kriz)/i);
+  const pageIds = m ? m[1].split(',').map((x) => x.trim()).filter(Boolean) : [];
+  const risk = m ? (m[2].toLowerCase().startsWith('endi') ? 'endişe' : (m[2].toLowerCase() as 'yok' | 'kriz')) : null;
+  return { reply, pageIds, risk };
+}
+
 export const CRISIS_NOTE =
   'KRİZ NOTU: Kullanıcı açıkça kendine zarar verme ya da ölüm düşüncesinden bahsetti. Kriz protokolünü uygula: yanında kal, güvende olup olmadığını sor, gerekiyorsa 112 ya da yanındaki biri, konuşmayı sen bitirme.';
 
@@ -69,7 +82,8 @@ export function chatTask(p: Persona, ctx: ChatContext): string {
   return [
     'Görev: Kullanıcıyla sohbet ediyorsun. Bu uygulamanın içinde, onun günlüğünü bilen dostusun.',
     'Geçmişine dair bir şey sorarsa aşağıdaki sayfalardan cevapla ve ne zaman olduğunu söyle; sayfalarda yoksa dürüstçe söyle ve nasıl arayabileceğini öner.',
-    'reply alanına mesajını yaz. used_page_ids alanına yalnızca gerçekten dayandığın sayfaların id\'lerini koy.',
+    `Mesajını yaz. Ardından en sona, yeni bir satıra, kullanıcının görmeyeceği şu etiketi ekle: ${MARKER_OPEN}sayfalar: <gerçekten dayandığın sayfaların id'leri, virgülle; yoksa boş>; risk: <yok|endişe|kriz>${MARKER_CLOSE}`,
+    'risk: Kullanıcının mesajlarında kendine zarar verme ya da intihar riskine dair açık ya da dolaylı bir işaret (veda etmek, plan yapmak, ilaç biriktirmek, "bir daha uyanmasam", eşyalarını dağıtmak gibi) varsa "kriz"; ağır bir yük ama risk işareti yoksa "endişe"; diğer durumlarda "yok". Emin değilsen ihtiyatlı ol.',
     notesBlock(ctx.notes),
     ctx.goals.length ? `Aktif hedefleri:\n${ctx.goals.map((g) => `- ${g}`).join('\n')}` : '',
     ctx.pages.length ? `İlgili günlük sayfaları:\n${ctx.pages.map((pg) => page(pg.text, { id: pg.id, date: pg.date })).join('\n')}` : '',

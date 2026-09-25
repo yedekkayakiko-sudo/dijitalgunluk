@@ -10,6 +10,10 @@ describe('detectCrisis', () => {
     'ölsem kimse fark etmez',
     'KENDİMİ ÖLDÜRMEK istiyorum',
     'yasamak istemiyorum artik', // typed without Turkish letters
+    'Birkaç haftadır ilaçları biriktiriyorum.',
+    'Dün gece herkese veda mektubu yazdım.',
+    'Bazen ölmeyi düşünüyorum.',
+    'Bir daha uyanmasam keşke.',
   ])('flags acute: %s', (text) => {
     expect(detectCrisis(text).level).toBe('acute');
   });
@@ -20,6 +24,7 @@ describe('detectCrisis', () => {
 
   it('flags concern', () => {
     expect(detectCrisis('Artık dayanamıyorum, her şey üstüme geliyor').level).toBe('concern');
+    expect(detectCrisis('Yaşamaktan yoruldum, herkese yük oluyorum.').level).toBe('concern');
   });
 
   it.each([
@@ -29,6 +34,8 @@ describe('detectCrisis', () => {
     'Olsa da olmasa da fark etmez.',
     'Utançtan ölmek istiyorum, herkesin önünde düştüm!',
     'Gülmekten öldüm, sıcaktan ölüyorum burada.',
+    'Kuaförden çıktım, saçlarım jilet gibi oldu!',
+    'Toplantıda sunumu bitirmek istiyorum ama her şey yolunda.',
   ])('does not flag everyday text: %s', (text) => {
     expect(detectCrisis(text).level).toBe('none');
   });

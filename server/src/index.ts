@@ -4,6 +4,7 @@ import { createApp } from './app';
 import { loadConfig } from './config';
 import { VoyageEmbedder } from './embeddings';
 import { MemorySink } from './events';
+import { MemoryQuotaStore } from './quota';
 
 // Node entry, for local development. Production runs on Cloudflare Workers (src/worker.ts).
 const config = loadConfig(process.env);
@@ -16,6 +17,7 @@ const app = createApp({
   fast: hasClaudeKey ? new ClaudeMascot(config.fastModel) : null,
   embedder: config.voyageApiKey ? new VoyageEmbedder(config.voyageApiKey, config.voyageModel) : null,
   events: new MemorySink(),
+  quotas: new MemoryQuotaStore(),
 });
 
 serve({ fetch: app.fetch, port: config.port }, (info) => {

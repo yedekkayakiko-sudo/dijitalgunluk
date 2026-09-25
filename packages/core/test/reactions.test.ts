@@ -12,7 +12,7 @@ const base = (over: Partial<ReactionInput>): ReactionInput => ({
   entry: e('Bugün sakin bir gündü, akşam biraz kitap okudum ve erkenden uyudum, yarın için planlarım var.', 0),
   recent: [],
   knownEntities: [],
-  pastReactions: [],
+  pastReactions: [{ kind: 'welcome', at: '2026-01-01T00:00:00Z' }],
   tone: 'calm',
   now,
   random: () => 0, // always "roll" success
@@ -20,8 +20,15 @@ const base = (over: Partial<ReactionInput>): ReactionInput => ({
 });
 
 describe('decideReaction', () => {
+  const earlier = { recent: [e('Dün sakin bir gündü.', 24)], pastReactions: [{ kind: 'welcome' as const, at: hoursAgo(48) }] };
+
+  it('always welcomes the very first page', () => {
+    expect(decideReaction(base({ pastReactions: [] })).kind).toBe('welcome');
+    expect(decideReaction(base({ pastReactions: [], entry: e('ilk', 0, { privacy: 'private' }) }))).toMatchObject({ kind: 'welcome', aiAllowed: false });
+  });
+
   it('is silent by default', () => {
-    expect(decideReaction(base({})).kind).toBe('none');
+    expect(decideReaction(base(earlier)).kind).toBe('none');
   });
 
   it('always answers a crisis, even for private entries, with on-device words only', () => {

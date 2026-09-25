@@ -34,6 +34,23 @@ describe('ClaudeMascot', () => {
     expect(argOf(haiku.create)).toMatchObject({ output_config: {}, system: 't' });
   });
 
+  it('streams text deltas and returns the full text', async () => {
+    const events = [
+      { type: 'content_block_delta', delta: { type: 'text_delta', text: 'Mer' } },
+      { type: 'content_block_delta', delta: { type: 'text_delta', text: 'haba' } },
+    ];
+    const stream = vi.fn(() => ({
+      async *[Symbol.asyncIterator]() {
+        yield* events;
+      },
+      finalMessage: async () => ({ stop_reason: 'end_turn', content: [{ type: 'text', text: 'Merhaba' }] }),
+    }));
+    const client = { beta: { messages: { stream } } } as unknown as Anthropic;
+    const seen: string[] = [];
+    expect(await new ClaudeMascot('claude-sonnet-5', client).stream(req, (d) => seen.push(d))).toBe('Merhaba');
+    expect(seen).toEqual(['Mer', 'haba']);
+  });
+
   it('returns null on refusal so the app uses its template', async () => {
     const { client } = fakeClient({ stop_reason: 'refusal', content: [] });
     expect(await new ClaudeMascot('claude-sonnet-5', client).text(req)).toBeNull();

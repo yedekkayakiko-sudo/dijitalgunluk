@@ -25,10 +25,16 @@ const ACUTE = [
   'artik burada olmak istemiyorum',
   'keske hic dogmasaydim',
   'herkes bensiz daha iyi',
+  // indirect signals: preparation, farewells, methods
+  'ilaclari biriktir', 'haplari biriktir', 'ilac biriktir',
+  'veda mektubu', 'herkese veda', 'vasiyetimi', 'son mesajim bu',
+  'kendimi yok et', 'kendimi yarala', 'kolumu kest', 'kollarimi kes', 'kendimi atmak', 'kendimi atacag',
+  'kopruden atla', 'camdan atla', 'yuksekten atla', 'bu dunyadan gitmek',
+  'bir daha uyanmasam', 'bir daha uyanmak istemiyorum', 'yasamak icin bir sebep kalmadi',
 ].map(phrase);
 
 // Words where folding is ambiguous (öldür/oldur, ölüp/olup): matched on the unfolded text.
-const ACUTE_EXACT = ['kendimi öldür', 'ölüp gitsem', 'ölsem', 'ölmek isti'].map(phrase);
+const ACUTE_EXACT = ['kendimi öldür', 'ölüp gitsem', 'ölsem', 'ölmek isti', 'ölmeyi düşün', 'ölümü düşünüyorum'].map(phrase);
 
 const CONCERN = [
   'artik dayanamiyorum',
@@ -39,6 +45,8 @@ const CONCERN = [
   'hicbir cikis yok',
   'kacip gitmek istiyorum',
   'uyuyup uyanmamak',
+  'yasamaktan yoruldum', 'dayanacak gucum kalmadi', 'kendimden nefret', 'herkese yuk', 'kimseye yuk olmak',
+  'her seyi bitirmek istiyorum', 'hicbir anlami kalmadi',
 ].map(phrase);
 
 export type CrisisLevel = 'none' | 'concern' | 'acute';

@@ -36,6 +36,16 @@ describe('searchEntries', () => {
     expect(hits[0].inWindow).toBe(true);
   });
 
+  it('understands questions about feelings, not just words', () => {
+    const moodDocs = [
+      { id: 'sad', createdAt: '2026-08-01T20:00:00', text: 'Toplantı berbattı, eve gelip ağladım.', mood: 1 },
+      { id: 'happy', createdAt: '2026-08-02T20:00:00', text: 'Sahilde yürüdük, çok güldük.', mood: 5 },
+      { id: 'plain', createdAt: '2026-08-03T20:00:00', text: 'Market alışverişi yaptım.', mood: 3 },
+    ];
+    expect(searchEntries('üzgün olduğum günler', moodDocs, { now })[0].id).toBe('sad');
+    expect(searchEntries('en mutlu olduğum anlar', moodDocs, { now })[0].id).toBe('happy');
+  });
+
   it('uses embeddings when available', () => {
     const withVec = docs.map((d, i) => ({ ...d, embedding: i === 2 ? [1, 0] : [0, 1] }));
     const hits = searchEntries('sınava hazırlık', withVec, { now, queryEmbedding: [1, 0] });

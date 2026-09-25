@@ -29,6 +29,8 @@ export interface JsonRequest<S extends z.ZodType> extends TextRequest {
 export interface Mascot {
   text(req: TextRequest): Promise<string | null>;
   json<S extends z.ZodType>(req: JsonRequest<S>): Promise<z.infer<S> | null>;
+  /** Streams text deltas as they are generated; resolves with the full text, or null on a refusal. */
+  stream(req: TextRequest, onText: (delta: string) => void): Promise<string | null>;
 }
 
 const FALLBACK_MODELS = new Set(['claude-opus-5', 'claude-opus-5-5', 'claude-fable-5', 'claude-fable-5-1']);
@@ -77,6 +79,16 @@ export class ClaudeMascot implements Mascot {
       .join('')
       .trim();
     return text || null;
+  }
+
+  async stream(req: TextRequest, onText: (delta: string) => void): Promise<string | null> {
+    const s = this.client.beta.messages.stream(this.base(req));
+    for await (const event of s) {
+      if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') onText(event.delta.text);
+    }
+    const final = await s.finalMessage();
+    if (final.stop_reason === 'refusal') return null;
+    return final.content.flatMap((b) => (b.type === 'text' ? [b.text] : [])).join('').trim() || null;
   }
 
   async json<S extends z.ZodType>(req: JsonRequest<S>): Promise<z.infer<S> | null> {

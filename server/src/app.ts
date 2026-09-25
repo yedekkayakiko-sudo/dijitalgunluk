@@ -2,16 +2,20 @@ import { detectCrisis, isSafeMascotText, scenarioEligibility } from '@gunluk/cor
 import { Hono, type Context } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { cors } from 'hono/cors';
+import { streamSSE } from 'hono/streaming';
 import { z } from 'zod';
 import type { Mascot, TextRequest } from './ai';
 import type { Config } from './config';
 import type { Embedder } from './embeddings';
 import { cleanProps, EVENT_NAMES, type EventSink } from './events';
+import { dailyHash, type QuotaStore } from './quota';
 import {
   chatTask,
   EXTRACT_TASK,
   letterTask,
+  MARKER_OPEN,
   page,
+  parseChatTag,
   PROFILE_TASK,
   reactionTask,
   scenarioTask,
@@ -76,7 +80,6 @@ const schemas = {
   }),
 };
 
-const ChatReply = z.object({ reply: z.string(), used_page_ids: z.array(z.string()) });
 const Extracted = z.object({ people: z.array(z.object({ name: z.string() })), places: z.array(z.object({ name: z.string() })) });
 const CATEGORIES = ['kisi', 'durum', 'deger', 'iyi_gelen', 'an', 'zorluk'] as const;
 const ProfileOut = z.object({ notes: z.array(z.object({ category: z.enum(CATEGORIES), text: z.string() })) });
@@ -105,9 +108,16 @@ export interface Deps {
   fast: Mascot | null;
   embedder: Embedder | null;
   events: EventSink;
+  quotas: QuotaStore;
+  /** Platform rate limiter (Cloudflare's binding) when available; otherwise a best-effort in-memory one is used. */
+  rateLimit?: (key: string) => Promise<boolean>;
 }
 
-export function createApp({ config, voice, fast, embedder, events }: Deps) {
+const LEVEL = { none: 0, concern: 1, acute: 2 } as const;
+type Level = keyof typeof LEVEL;
+const maxLevel = (a: Level, b: Level): Level => (LEVEL[a] >= LEVEL[b] ? a : b);
+
+export function createApp({ config, voice, fast, embedder, events, quotas, rateLimit }: Deps) {
   const app = new Hono();
   const limiter = new RateLimiter(config.hourlyLimit);
 
@@ -126,9 +136,29 @@ export function createApp({ config, voice, fast, embedder, events }: Deps) {
     if (config.appKey && c.req.header('x-app-key') !== config.appKey) return c.json({ error: 'unauthorized' }, 401);
     if (c.req.path === '/v1/events' || c.req.path === '/v1/stats') return next();
     const id = c.req.header('x-install-id') ?? c.req.header('cf-connecting-ip') ?? c.req.header('x-forwarded-for') ?? 'anon';
-    if (!limiter.allow(id)) return c.json({ error: 'rate_limited' }, 429);
+    const allowed = rateLimit ? await rateLimit(id) : limiter.allow(id);
+    if (!allowed) return c.json({ error: 'rate_limited' }, 429);
     await next();
   });
+
+  /**
+   * Daily ceilings per install, per IP and for the whole service. Messages with
+   * crisis language are never refused because of a limit.
+   */
+  async function spend(c: Context, exempt = false): Promise<Response | null> {
+    if (exempt) return null;
+    const day = new Date().toISOString().slice(0, 10);
+    const install = c.req.header('x-install-id') ?? 'none';
+    const ip = c.req.header('cf-connecting-ip') ?? c.req.header('x-forwarded-for') ?? 'none';
+    const [byInstall, byIp, total] = await Promise.all([
+      quotas.hit(day, `i:${await dailyHash(install, day, config.hashSalt)}`),
+      quotas.hit(day, `a:${await dailyHash(ip, day, config.hashSalt)}`),
+      quotas.hit(day, 'global'),
+    ]);
+    if (total > config.globalDailyLimit) return c.json({ error: 'busy' }, 503);
+    if (byInstall > config.installDailyLimit || byIp > config.ipDailyLimit) return c.json({ error: 'daily_limit' }, 429);
+    return null;
+  }
 
   async function body<S extends z.ZodType>(c: Context, schema: S): Promise<z.infer<S> | Response> {
     const parsed = schema.safeParse(await c.req.json().catch(() => null));
@@ -151,6 +181,8 @@ export function createApp({ config, voice, fast, embedder, events }: Deps) {
     if (b instanceof Response) return b;
     if (!voice) return unavailable(c);
     const intent = b.kind === 'support' && detectCrisis(b.entry).level === 'acute' ? 'crisis' : b.kind;
+    const limited = await spend(c, intent === 'crisis' || intent === 'support');
+    if (limited) return limited;
     const heavy = intent === 'crisis' || intent === 'support';
     const out = await safeText(
       voice,
@@ -165,28 +197,56 @@ export function createApp({ config, voice, fast, embedder, events }: Deps) {
     return c.json(out ? { text: out, source: 'ai' } : { text: b.draft, source: 'template' });
   });
 
+  // Streams the reply as server-sent events: `delta` chunks, then one `done` event
+  // carrying the final, safety-checked text (which the app shows in place of the stream).
   app.post('/v1/chat', async (c) => {
     const b = await body(c, schemas.chat);
     if (b instanceof Response) return b;
     if (!voice) return unavailable(c);
-    const crisis = detectCrisis(b.messages[b.messages.length - 1].content).level;
+    const keyword = detectCrisis(b.messages[b.messages.length - 1].content).level;
+    const limited = await spend(c, keyword !== 'none');
+    if (limited) return limited;
 
-    const req = {
-      task: chatTask(b as Persona, { notes: b.notes, goals: b.goals, pages: b.pages, crisis: crisis === 'acute', longHeavy: b.longHeavy }),
+    const req: TextRequest = {
+      task: chatTask(b as Persona, { notes: b.notes, goals: b.goals, pages: b.pages, crisis: keyword === 'acute', longHeavy: b.longHeavy }),
       messages: b.messages,
-      effort: crisis === 'none' ? ('low' as const) : ('medium' as const),
+      effort: keyword === 'none' ? 'low' : 'medium',
       maxTokens: 6000,
-      schema: ChatReply,
     };
-    let out = await voice.json(req);
-    if (out && !isSafeMascotText(out.reply)) out = await voice.json({ ...req, task: `${req.task}\n\n${RETRY_NOTE}` });
-    const ok = !!out && out.reply.length <= 3000 && isSafeMascotText(out.reply);
-    const known = new Set(b.pages.map((p) => p.id));
-    return c.json({
-      reply: ok ? out!.reply : CHAT_FALLBACK,
-      usedPageIds: ok ? out!.used_page_ids.filter((id) => known.has(id)) : [],
-      crisis,
-      source: ok ? 'ai' : 'template',
+
+    return streamSSE(c, async (sse) => {
+      let full = '';
+      let sent = 0;
+      let chain: Promise<void> = Promise.resolve();
+      let final: string | null = null;
+      try {
+        final = await voice.stream(req, (delta) => {
+          full += delta;
+          const cut = full.indexOf(MARKER_OPEN);
+          const visible = cut >= 0 ? full.slice(0, cut) : full;
+          if (visible.length > sent) {
+            const chunk = visible.slice(sent);
+            sent = visible.length;
+            chain = chain.then(() => sse.writeSSE({ event: 'delta', data: JSON.stringify({ t: chunk }) }));
+          }
+        });
+      } catch (err) {
+        console.error('[POST /v1/chat stream]', (err as Error).name, (err as { status?: number }).status ?? '');
+      }
+      await chain;
+      const parsed = parseChatTag(final ?? '');
+      const modelLevel: Level = parsed.risk === 'kriz' ? 'acute' : parsed.risk === 'endişe' ? 'concern' : 'none';
+      const ok = !!final && parsed.reply.length > 0 && parsed.reply.length <= 3000 && isSafeMascotText(parsed.reply);
+      const known = new Set(b.pages.map((p) => p.id));
+      await sse.writeSSE({
+        event: 'done',
+        data: JSON.stringify({
+          reply: ok ? parsed.reply : CHAT_FALLBACK,
+          usedPageIds: ok ? parsed.pageIds.filter((id) => known.has(id)) : [],
+          crisis: maxLevel(keyword, modelLevel),
+          source: ok ? 'ai' : 'template',
+        }),
+      });
     });
   });
 
@@ -194,6 +254,8 @@ export function createApp({ config, voice, fast, embedder, events }: Deps) {
     const b = await body(c, schemas.extract);
     if (b instanceof Response) return b;
     if (!fast) return unavailable(c);
+    const limited = await spend(c);
+    if (limited) return limited;
     const out = await fast.json({
       task: EXTRACT_TASK,
       persona: false,
@@ -214,6 +276,8 @@ export function createApp({ config, voice, fast, embedder, events }: Deps) {
     // Pages with crisis language never become memory notes.
     const pages = b.pages.filter((p) => detectCrisis(p.text).level === 'none');
     if (!pages.length) return c.json({ notes: b.notes });
+    const limited = await spend(c);
+    if (limited) return limited;
     const current = b.notes.length ? b.notes.map((n) => `- [${n.category}] ${n.text}`).join('\n') : '(henüz not yok)';
     const out = await voice.json({
       task: PROFILE_TASK,
@@ -236,6 +300,8 @@ export function createApp({ config, voice, fast, embedder, events }: Deps) {
     if (b instanceof Response) return b;
     if (!voice) return unavailable(c);
     const pages = b.excerpts.filter((e) => detectCrisis(e.text).level === 'none');
+    const limited = await spend(c);
+    if (limited) return limited;
     const out = await safeText(
       voice,
       {
@@ -255,6 +321,8 @@ export function createApp({ config, voice, fast, embedder, events }: Deps) {
     const eligibility = scenarioEligibility({ text: b.text, privacy: 'ai_full' });
     if (!eligibility.eligible) return c.json({ error: 'not_eligible', reason: eligibility.reason }, 422);
     if (!voice) return unavailable(c);
+    const limited = await spend(c);
+    if (limited) return limited;
     const out = await safeText(
       voice,
       {
@@ -273,6 +341,8 @@ export function createApp({ config, voice, fast, embedder, events }: Deps) {
     const b = await body(c, schemas.embed);
     if (b instanceof Response) return b;
     if (!embedder) return c.json({ error: 'embeddings_unavailable' }, 501);
+    const limited = await spend(c);
+    if (limited) return limited;
     return c.json({ vectors: await embedder.embed(b.texts, b.kind) });
   });
 
