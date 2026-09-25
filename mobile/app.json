@@ -2,7 +2,7 @@
   "expo": {
     "name": "Pusula Günlük",
     "slug": "pusula-gunluk",
-    "version": "0.1.0",
+    "version": "0.2.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "pusulagunluk",
@@ -28,7 +28,10 @@
         "android.permission.RECORD_AUDIO",
         "android.permission.ACCESS_BACKGROUND_LOCATION",
         "android.permission.ACCESS_FINE_LOCATION",
-        "android.permission.SYSTEM_ALERT_WINDOW"
+        "android.permission.SYSTEM_ALERT_WINDOW",
+        "android.permission.ACTIVITY_RECOGNITION",
+        "android.permission.CAMERA",
+        "android.permission.READ_CONTACTS"
       ],
       "predictiveBackGestureEnabled": false
     },
@@ -69,6 +72,19 @@
           "locationAlwaysPermission": false,
           "isIosBackgroundLocationEnabled": false,
           "isAndroidBackgroundLocationEnabled": false
+        }
+      ],
+      "expo-sharing",
+      [
+        "expo-notifications",
+        {
+          "color": "#D9694A"
+        }
+      ],
+      [
+        "expo-sensors",
+        {
+          "motionPermission": false
         }
       ]
     ],

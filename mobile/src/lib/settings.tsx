@@ -12,7 +12,19 @@ export interface Settings {
   defaultPrivacy: PrivacyLevel;
   showMoodChart: boolean;
   serverUrl: string;
+  /** Anonymous, aggregate usage counts (no text, no identifier). */
+  analytics: boolean;
+  /** Daily reminder time "HH:MM", or null when off. */
+  reminderTime: string | null;
+  /** KVKK: explicit consents given before AI can be enabled. */
+  consent: { version: number; at: string; special: boolean; transfer: boolean } | null;
 }
+
+/** Bump when the consent texts change materially; users are asked again. */
+export const CONSENT_VERSION = 1;
+
+export const hasValidConsent = (s: Pick<Settings, 'consent'>) =>
+  !!s.consent && s.consent.version === CONSENT_VERSION && s.consent.special && s.consent.transfer;
 
 export const DEFAULT_SETTINGS: Settings = {
   onboarded: false,
@@ -23,6 +35,9 @@ export const DEFAULT_SETTINGS: Settings = {
   defaultPrivacy: 'ai_full',
   showMoodChart: false,
   serverUrl: process.env.EXPO_PUBLIC_API_URL ?? '',
+  analytics: false,
+  reminderTime: null,
+  consent: null,
 };
 
 const KEY = 'settings';
@@ -32,6 +47,8 @@ interface Ctx {
   ready: boolean;
   update: (patch: Partial<Settings>) => Promise<void>;
   reset: () => void;
+  /** Re-reads settings from the database (after a backup restore). */
+  reload: () => Promise<void>;
 }
 
 const SettingsContext = createContext<Ctx | null>(null);
@@ -62,7 +79,13 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     setSettings(DEFAULT_SETTINGS);
   }, []);
 
-  return <SettingsContext.Provider value={{ settings, ready, update, reset }}>{children}</SettingsContext.Provider>;
+  const reload = useCallback(async () => {
+    const s = await readSettings();
+    current.current = s;
+    setSettings(s);
+  }, []);
+
+  return <SettingsContext.Provider value={{ settings, ready, update, reset, reload }}>{children}</SettingsContext.Provider>;
 }
 
 export function useSettings(): Ctx {

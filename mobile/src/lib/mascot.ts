@@ -1,128 +1,76 @@
-import {
-  decideReaction,
-  detectCrisis,
-  normalizeKey,
-  searchEntries,
-  type CrisisLevel,
-  type Entry,
-  type EntityMention,
-  type ReactionKind,
-} from '@gunluk/core';
-import { api } from './api';
-import {
-  addReaction,
-  entityNamesForEntries,
-  linkEntities,
-  listEntities,
-  listEntries,
-  recentReactions,
-  setEmbedding,
-  type StoredEntry,
-} from './db';
+import { decideReaction, detectCrisis, normalizeKey, type CrisisLevel, type Entry, type EntityMention, type ReactionKind } from '@gunluk/core';
+import { track } from './analytics';
+import { aiReady, api } from './api';
+import { addReaction, linkEntities, listEntities, listEntries, recentReactions, setEmbedding } from './db';
+import { maybeUpdateNotes, noteTexts } from './memory';
+import { rewardEntry } from './pet';
 import { readSettings } from './settings';
 
 export interface MascotReply {
   kind: ReactionKind;
   crisisLevel: CrisisLevel;
   text: string | null;
+  /** Water drops earned by this page (new pages only). */
+  drops: number;
 }
 
 /**
- * Runs after an entry is saved: crisis check, entity memory, embedding and
- * (sometimes) a short reaction. `isNew` is false for edits, which never
- * trigger a new reaction except for crisis signals.
+ * Runs after an entry is saved: crisis check, memory (people, places, notes),
+ * search index, the mascot's reaction, and the drops the mascot can be fed.
+ * Edits never trigger a new reaction or reward, except for crisis language.
  */
 export async function afterSave(entry: Entry, isNew: boolean): Promise<MascotReply> {
   const settings = await readSettings();
+  const ai = aiReady(settings);
   const [known, recent, past] = await Promise.all([listEntities(), listEntries({ limit: 12 }), recentReactions(30)]);
 
-  const decision = decideReaction({
-    entry,
-    recent: recent.filter((e) => e.id !== entry.id),
-    knownEntities: known,
-    pastReactions: past,
-    tone: settings.tone,
-  });
+  const decision = decideReaction({ entry, recent: recent.filter((e) => e.id !== entry.id), knownEntities: known, pastReactions: past, tone: settings.tone });
+  const crisis = decision.crisisLevel !== 'none';
 
-  // Memory: people and places, only for full-analysis entries.
-  let mentions: EntityMention[] = decision.mentions;
-  if (entry.privacy === 'ai_full' && decision.kind !== 'crisis') {
-    const ai = settings.aiEnabled ? await api.extract(entry.text) : null;
-    if (ai) {
+  // People and places, only for full-analysis entries without crisis language.
+  let mentions: EntityMention[] = [];
+  if (entry.privacy === 'ai_full' && !crisis) {
+    mentions = decision.mentions;
+    const extracted = ai ? await api.extract(entry.text) : null;
+    if (extracted) {
       const add = (kind: 'person' | 'place', name: string) => {
         const key = normalizeKey(name);
         if (key && !mentions.some((m) => m.key === key)) mentions = [...mentions, { kind, name, key }];
       };
-      ai.people.forEach((n) => add('person', n));
-      ai.places.forEach((n) => add('place', n));
+      extracted.people.forEach((n) => add('person', n));
+      extracted.places.forEach((n) => add('place', n));
     }
-  } else {
-    mentions = [];
   }
   await linkEntities(entry.id, mentions, entry.createdAt);
 
-  // Semantic search index, for entries the AI is allowed to see.
-  if (entry.privacy !== 'private' && settings.aiEnabled && detectCrisis(entry.text).level === 'none') {
+  // Semantic search index and memory notes run in the background.
+  if (ai && entry.privacy !== 'private' && !crisis) {
     api.embed([entry.text], 'document').then((v) => v?.[0] && setEmbedding(entry.id, v[0])).catch(() => {});
+    if (entry.privacy === 'ai_full') maybeUpdateNotes().catch(() => {});
   }
 
-  // Edits never trigger a new reaction, except for crisis signals.
-  const speak = decision.kind === 'crisis' || (isNew && decision.kind !== 'none');
-  if (!speak || !decision.text) return { kind: 'none', crisisLevel: 'none', text: null };
+  const drops = isNew ? await rewardEntry(entry) : 0;
+  track('entry_saved', { kind: entry.kind, privacy: entry.privacy, photo: entry.photos.length > 0 });
+
+  const speak = decision.kind === 'crisis' || decision.kind === 'support' ? true : isNew && decision.kind !== 'none';
+  if (!speak || !decision.text) return { kind: 'none', crisisLevel: decision.crisisLevel, text: null, drops };
 
   let text = decision.text;
-  if (decision.aiAllowed && decision.kind !== 'crisis') {
-    const ai = await api.reaction({ kind: decision.kind, subject: decision.subject, draft: decision.text, entry: entry.text });
-    if (ai?.text) text = ai.text;
+  if (decision.aiAllowed && ai) {
+    const r = await api.reaction({ kind: decision.kind, subject: decision.subject, draft: decision.text, entry: entry.text, notes: await noteTexts() });
+    if (r?.text) text = r.text;
   }
   await addReaction({ entryId: entry.id, kind: decision.kind, subject: decision.subject, text, at: new Date().toISOString() });
-  return { kind: decision.kind, crisisLevel: decision.crisisLevel, text };
+  track(crisis ? 'support_shown' : 'reaction_shown', { kind: decision.kind });
+  return { kind: decision.kind, crisisLevel: decision.crisisLevel, text, drops };
 }
 
-export interface AskResult {
-  answer: string;
-  aiGenerated: boolean;
-  entries: StoredEntry[];
-  crisisLevel: CrisisLevel;
-}
-
-const dateLabel = (iso: string) =>
-  new Date(iso).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric', weekday: 'long' });
-
-/** "3 yıl önce tanıştığım çocuk kimdi?" */
-export async function askMascot(question: string): Promise<AskResult> {
-  const crisis = detectCrisis(question);
-  if (crisis.level !== 'none') return { answer: '', aiGenerated: false, entries: [], crisisLevel: crisis.level };
-
-  const docs = await listEntries({ excludePrivate: true });
-  const queryEmbedding = docs.some((d) => d.embedding) ? (await api.embed([question], 'query'))?.[0] ?? null : null;
-  const hits = searchEntries(question, docs, { queryEmbedding, limit: 6 });
-  const byId = new Map(docs.map((d) => [d.id, d]));
-  const found = hits.map((h) => byId.get(h.id)!).filter(Boolean);
-
-  if (found.length === 0) {
-    return {
-      answer: 'Bununla ilgili bir sayfa bulamadım. Farklı kelimelerle ya da yaklaşık bir zaman vererek ("geçen yaz", "2 yıl önce") sorabilirsin.',
-      aiGenerated: false,
-      entries: [],
-      crisisLevel: 'none',
-    };
-  }
-
-  const people = await entityNamesForEntries(found.map((e) => e.id));
-  // Pages with crisis language are shown to the user but never sent to the AI.
-  const shareable = found.filter((e) => detectCrisis(e.text).level === 'none');
-  const ai = shareable.length
-    ? await api.ask(question, shareable.map((e) => ({ id: e.id, date: dateLabel(e.createdAt), text: e.text, people: people[e.id] ?? [] })))
-    : null;
-  if (ai) {
-    const used = ai.entryIds.length ? found.filter((e) => ai.entryIds.includes(e.id)) : found.slice(0, 3);
-    return { answer: ai.answer, aiGenerated: true, entries: used, crisisLevel: 'none' };
-  }
-  return {
-    answer: found.length === 1 ? 'Sanırım şu sayfadan bahsediyorsun:' : 'Aradığın şey bu sayfalardan birinde olabilir:',
-    aiGenerated: false,
-    entries: found.slice(0, 4),
-    crisisLevel: 'none',
-  };
+/** Long heavy stretch: mostly hard moods (or repeated support) over two weeks. Never a diagnosis. */
+export async function isLongHeavyPeriod(): Promise<boolean> {
+  const since = new Date(Date.now() - 14 * 86_400_000).toISOString();
+  const entries = await listEntries({ from: since });
+  const moods = entries.map((e) => e.mood).filter((m): m is NonNullable<typeof m> => m != null);
+  const heavyMoods = moods.length >= 5 && moods.filter((m) => m <= 2).length / moods.length >= 0.7;
+  const supports = (await recentReactions(30)).filter((r) => (r.kind === 'support' || r.kind === 'crisis') && r.at >= since).length;
+  return heavyMoods || supports >= 3 || entries.some((e) => detectCrisis(e.text).level === 'acute');
 }

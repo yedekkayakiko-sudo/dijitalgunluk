@@ -7,22 +7,36 @@
     "development": {
       "developmentClient": true,
       "distribution": "internal",
-      "android": { "buildType": "apk" }
+      "android": {
+        "buildType": "apk"
+      }
     },
     "preview": {
       "distribution": "internal",
-      "android": { "buildType": "apk" },
-      "env": { "EXPO_PUBLIC_API_URL": "https://YOUR-SERVER.example.com" }
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://pusula-gunluk.YOUR-ACCOUNT.workers.dev",
+        "EXPO_PUBLIC_APP_KEY": "YOUR-APP-KEY"
+      }
     },
     "production": {
       "autoIncrement": true,
-      "android": { "buildType": "app-bundle" },
-      "env": { "EXPO_PUBLIC_API_URL": "https://YOUR-SERVER.example.com" }
+      "android": {
+        "buildType": "app-bundle"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://pusula-gunluk.YOUR-ACCOUNT.workers.dev",
+        "EXPO_PUBLIC_APP_KEY": "YOUR-APP-KEY"
+      }
     }
   },
   "submit": {
     "production": {
-      "android": { "track": "internal" }
+      "android": {
+        "track": "internal"
+      }
     }
   }
 }

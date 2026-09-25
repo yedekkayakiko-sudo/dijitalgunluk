@@ -4,7 +4,9 @@ import { useCallback, useState } from 'react';
 import { Alert, TextInput, View } from 'react-native';
 import { formatDate } from '@/components/EntryCard';
 import { Button, Card, Chip, Gap, Row, Screen, T } from '@/components/ui';
+import { track } from '@/lib/analytics';
 import { addLetter, deleteLetter, listLetters, markLetterOpened } from '@/lib/db';
+import { scheduleOnDate } from '@/lib/notifications';
 import { serif, space, useColors } from '@/theme';
 
 export default function Letters() {
@@ -23,6 +25,8 @@ export default function Letters() {
   const seal = async () => {
     if (!body.trim()) return;
     await addLetter(openDateFor(months).toISOString(), body.trim());
+    await scheduleOnDate(openDateFor(months), 'Geçmişten bir mektubun var ✉️', 'Kendine yazdığın mektubun açılma zamanı geldi.', 'letter');
+    track('letter_written', { months });
     setBody('');
     setWriting(false);
     load();
@@ -30,6 +34,7 @@ export default function Letters() {
   };
 
   const read = async (l: FutureLetter) => {
+    if (!l.openedAt) track('letter_opened');
     await markLetterOpened(l.id);
     setOpen(open === l.id ? null : l.id);
     load();

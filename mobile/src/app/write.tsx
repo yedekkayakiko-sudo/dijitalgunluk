@@ -9,6 +9,7 @@ import { MoodPicker, PRIVACY, PrivacyPicker, WEATHER } from '@/components/picker
 import { Button, Chip, Row, T } from '@/components/ui';
 import { clearDraft, getEntry, loadDraft, newId, saveDraft, saveEntry, type Draft } from '@/lib/db';
 import { afterSave } from '@/lib/mascot';
+import { usePet } from '@/lib/pet';
 import { deletePhotos, pickPhotos } from '@/lib/photos';
 import { useSettings } from '@/lib/settings';
 import { serif, space, useColors } from '@/theme';
@@ -24,7 +25,8 @@ const PROMPTS = [
 export default function Write() {
   const c = useColors();
   const { settings } = useSettings();
-  const params = useLocalSearchParams<{ id?: string; mode?: string }>();
+  const params = useLocalSearchParams<{ id?: string; mode?: string; prompt?: string }>();
+  const { refresh: refreshPet } = usePet();
   const editingId = params.id ?? null;
 
   const [kind, setKind] = useState<EntryKind>(params.mode === 'word' ? 'one_word' : 'entry');
@@ -41,7 +43,7 @@ export default function Write() {
   const [locating, setLocating] = useState(false);
   const [savedAt, setSavedAt] = useState<Date | null>(null);
   const originalPhotos = useRef<string[]>([]);
-  const [prompt] = useState(() => PROMPTS[Math.floor(Math.random() * PROMPTS.length)]);
+  const [prompt] = useState(() => params.prompt || PROMPTS[Math.floor(Math.random() * PROMPTS.length)]);
 
   // Restore: a matching draft wins over the stored entry, so nothing typed is ever lost.
   useEffect(() => {
@@ -144,8 +146,9 @@ export default function Write() {
       await saveEntry(entry);
       deletePhotos(originalPhotos.current.filter((p) => !photos.includes(p)));
       await clearDraft();
-      await afterSave(entry, !editingId).catch(() => null);
-      router.replace(`/entry/${entry.id}?fresh=1`);
+      const r = await afterSave(entry, !editingId).catch(() => null);
+      await refreshPet();
+      router.replace(`/entry/${entry.id}?fresh=1&drops=${r?.drops ?? 0}`);
     } catch {
       setSaving(false);
       Alert.alert('Kaydedilemedi', 'Taslağın güvende. Birazdan tekrar dene.');

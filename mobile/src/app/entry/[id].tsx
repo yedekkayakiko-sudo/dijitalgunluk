@@ -3,15 +3,18 @@ import { Image } from 'expo-image';
 import { router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { ActivityIndicator, Alert, View } from 'react-native';
-import { CrisisCard } from '@/components/CrisisCard';
 import { formatDate } from '@/components/EntryCard';
 import type { Expression } from '@/components/Mascot';
 import { MascotBubble, reportMascotText } from '@/components/MascotBubble';
 import { PRIVACY } from '@/components/pickers';
+import { SupportStrip } from '@/components/SupportStrip';
 import { Button, Card, Chip, Gap, Row, Screen, T } from '@/components/ui';
-import { api } from '@/lib/api';
+import { track } from '@/lib/analytics';
+import { aiReady, api } from '@/lib/api';
 import { deleteEntry, entitiesForEntry, getEntry, reactionForEntry, type StoredEntry, type StoredReaction } from '@/lib/db';
+import { noteTexts } from '@/lib/memory';
 import { deletePhotos } from '@/lib/photos';
+import { takeQuota } from '@/lib/quota';
 import { useSettings } from '@/lib/settings';
 import { space, useColors } from '@/theme';
 
@@ -19,12 +22,14 @@ const EXPRESSION: Record<string, Expression> = {
   new_person: 'curious',
   short_streak: 'caring',
   recurring_theme: 'caring',
+  support: 'caring',
   crisis: 'caring',
+  celebrate: 'happy',
 };
 
 export default function EntryScreen() {
   const c = useColors();
-  const { id, fresh } = useLocalSearchParams<{ id: string; fresh?: string }>();
+  const { id, fresh, drops } = useLocalSearchParams<{ id: string; fresh?: string; drops?: string }>();
   const { settings } = useSettings();
   const [entry, setEntry] = useState<StoredEntry | null>(null);
   const [reaction, setReaction] = useState<StoredReaction | null>(null);
@@ -48,7 +53,11 @@ export default function EntryScreen() {
 
   const crisis: CrisisLevel = detectCrisis(entry.text).level;
   const mood = MOODS.find((m) => m.value === entry.mood);
-  const canPlay = settings.aiEnabled && scenarioEligibility(entry).eligible;
+  const eligibility = scenarioEligibility(entry);
+  const canPlay = aiReady(settings) && eligibility.eligible;
+  const heartache = eligibility.eligible && eligibility.mode === 'heartache';
+  const showReaction = !!reaction && (!!fresh || reaction.kind === 'support' || reaction.kind === 'crisis');
+  const earned = Number(drops ?? 0);
 
   const remove = () =>
     Alert.alert('Bu sayfa kalıcı olarak silinsin mi?', 'Sayfa, fotoğrafları ve maskotun ondan hatırladıkları silinir. Bu işlem geri alınamaz.', [
@@ -62,24 +71,62 @@ export default function EntryScreen() {
       },
     ]);
 
-  const playScenario = async () => {
+  const play = async () => {
+    if (!(await takeQuota('scenario'))) {
+      setScenario('Bugünlük hayal gücüm tükendi. 🌙 Yarın yine oynayalım mı?');
+      return;
+    }
     setScenarioLoading(true);
-    const res = await api.scenario(entry.text);
+    const res = await api.scenario(entry.text, await noteTexts());
     setScenarioLoading(false);
-    setScenario(res?.text ?? 'Bu sayfa için alternatif bir senaryo kuramadım. Belki başka bir gün?');
+    setScenario(res?.text ?? 'Bu sayfa için bir senaryo kuramadım. Belki başka bir gün?');
+    if (res) track('scenario_played', { mode: res.mode });
   };
+
+  const askPlay = () =>
+    heartache
+      ? Alert.alert(
+          'Farklı bir yol düşünelim mi?',
+          'Bu oyun zor bir konuya dokunabilir. Amacı pişmanlığı büyütmek değil, hafifletmek: öbür yolu dürüstçe konuşup bugün elinde olana bakacağız. Hazır mısın?',
+          [{ text: 'Şimdi değil', style: 'cancel' }, { text: 'Hazırım', onPress: play }],
+        )
+      : play();
 
   return (
     <Screen>
       <Stack.Screen options={{ title: fresh ? 'Kaydedildi' : '' }} />
-      {crisis !== 'none' ? (
+      {showReaction ? (
         <>
-          <CrisisCard level={crisis} />
+          <MascotBubble text={reaction!.text} expression={EXPRESSION[reaction!.kind] ?? 'idle'} name={settings.mascotName} size={64} reportable={aiReady(settings)} />
+          {crisis === 'acute' ? (
+            <>
+              <Gap h={space.s} />
+              <SupportStrip />
+            </>
+          ) : null}
+          {reaction!.kind === 'support' || reaction!.kind === 'crisis' ? (
+            <>
+              <Gap h={space.s} />
+              <Row>
+                <Button label="💬 Konuşalım" small onPress={() => router.push('/chat')} />
+                <Button label="🫁 Birlikte nefes" kind="secondary" small onPress={() => router.push('/breathe')} />
+              </Row>
+            </>
+          ) : null}
           <Gap />
         </>
-      ) : reaction && fresh ? (
+      ) : crisis === 'acute' ? (
         <>
-          <MascotBubble text={reaction.text} expression={EXPRESSION[reaction.kind] ?? 'idle'} name={settings.mascotName} size={64} reportable={settings.aiEnabled} />
+          <SupportStrip />
+          <Gap />
+        </>
+      ) : null}
+
+      {fresh && earned > 0 ? (
+        <>
+          <Card style={{ backgroundColor: c.accentSoft, borderColor: c.accentSoft }}>
+            <T v="body">💧 +{earned} damla kazandın. Ana sayfada su verebilirsin!</T>
+          </Card>
           <Gap />
         </>
       ) : null}
@@ -120,7 +167,7 @@ export default function EntryScreen() {
         <>
           <Gap h={space.l} />
           <Card style={{ gap: space.s }}>
-            <T v="heading">🎲 Alternatif senaryo</T>
+            <T v="heading">{heartache ? '🌗 Ya başka türlü olsaydı?' : '🎲 Alternatif senaryo'}</T>
             {scenario ? (
               <>
                 <T v="serif">{scenario}</T>
@@ -128,8 +175,12 @@ export default function EntryScreen() {
               </>
             ) : (
               <>
-                <T v="muted">Bu sıradan günde küçük bir seçim farklı olsaydı ne olurdu? Sadece eğlencesine.</T>
-                {scenarioLoading ? <ActivityIndicator color={c.accent} /> : <Button label="Hayal et" kind="secondary" small onPress={playScenario} />}
+                <T v="muted">
+                  {heartache
+                    ? 'Öbür yolu birlikte, dürüstçe yürüyelim: neler olabilirdi, bedelleri ne olurdu, ve bugün elinde ne var.'
+                    : 'Bu günde küçük bir seçim farklı olsaydı ne olurdu? Sadece eğlencesine.'}
+                </T>
+                {scenarioLoading ? <ActivityIndicator color={c.accent} /> : <Button label={heartache ? 'Düşünelim' : 'Hayal et'} kind="secondary" small onPress={askPlay} />}
               </>
             )}
           </Card>

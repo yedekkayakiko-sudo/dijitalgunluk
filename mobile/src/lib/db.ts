@@ -1,4 +1,4 @@
-import type { Entity, EntityKind, Entry, EntryKind, FutureLetter, Mood, PrivacyLevel, ReactionKind } from '@gunluk/core';
+import type { CrisisLevel, Entity, EntityKind, Entry, EntryKind, FutureLetter, Goal, GoalCheckin, GoalStatus, Mood, PrivacyLevel, ReactionKind } from '@gunluk/core';
 import * as Crypto from 'expo-crypto';
 import * as SecureStore from 'expo-secure-store';
 import * as SQLite from 'expo-sqlite';
@@ -91,6 +91,35 @@ const MIGRATIONS: string[] = [
     opened_at TEXT
   );
   CREATE TABLE kv (key TEXT PRIMARY KEY NOT NULL, value TEXT NOT NULL);
+  `,
+  `
+  CREATE TABLE goals (
+    id TEXT PRIMARY KEY NOT NULL,
+    created_at TEXT NOT NULL,
+    due_at TEXT NOT NULL,
+    text TEXT NOT NULL,
+    why TEXT,
+    status TEXT NOT NULL DEFAULT 'active',
+    reflection TEXT,
+    reviewed_at TEXT,
+    parent_id TEXT
+  );
+  CREATE TABLE goal_checkins (
+    id TEXT PRIMARY KEY NOT NULL,
+    goal_id TEXT NOT NULL,
+    at TEXT NOT NULL,
+    feeling TEXT NOT NULL,
+    note TEXT
+  );
+  CREATE TABLE chat_messages (
+    id TEXT PRIMARY KEY NOT NULL,
+    at TEXT NOT NULL,
+    role TEXT NOT NULL,
+    text TEXT NOT NULL,
+    page_ids TEXT NOT NULL DEFAULT '[]',
+    crisis TEXT NOT NULL DEFAULT 'none'
+  );
+  CREATE INDEX idx_chat_at ON chat_messages(at);
   `,
 ];
 
@@ -391,6 +420,87 @@ export async function deleteLetter(id: string): Promise<void> {
   await db.runAsync('DELETE FROM letters WHERE id = ?', id);
 }
 
+// ---------- goals ----------
+
+type GoalRow = {
+  id: string; created_at: string; due_at: string; text: string; why: string | null; status: GoalStatus;
+  reflection: string | null; reviewed_at: string | null; parent_id: string | null;
+};
+
+const toGoal = (r: GoalRow): Goal => ({
+  id: r.id, createdAt: r.created_at, dueAt: r.due_at, text: r.text, why: r.why, status: r.status,
+  reflection: r.reflection, reviewedAt: r.reviewed_at, parentId: r.parent_id,
+});
+
+export async function listGoals(): Promise<Goal[]> {
+  const db = await getDb();
+  return (await db.getAllAsync<GoalRow>('SELECT * FROM goals ORDER BY created_at ASC')).map(toGoal);
+}
+
+export async function addGoal(g: Pick<Goal, 'text' | 'why' | 'dueAt' | 'parentId'>): Promise<string> {
+  const db = await getDb();
+  const id = newId();
+  await db.runAsync(
+    'INSERT INTO goals (id, created_at, due_at, text, why, parent_id) VALUES (?, ?, ?, ?, ?, ?)',
+    id, new Date().toISOString(), g.dueAt, g.text, g.why, g.parentId,
+  );
+  return id;
+}
+
+export async function reviewGoal(id: string, status: Exclude<GoalStatus, 'active'>, reflection: string | null): Promise<void> {
+  const db = await getDb();
+  await db.runAsync('UPDATE goals SET status = ?, reflection = ?, reviewed_at = ? WHERE id = ?', status, reflection, new Date().toISOString(), id);
+}
+
+export async function deleteGoal(id: string): Promise<void> {
+  const db = await getDb();
+  await db.runAsync('UPDATE goals SET parent_id = NULL WHERE parent_id = ?', id);
+  await db.runAsync('DELETE FROM goal_checkins WHERE goal_id = ?', id);
+  await db.runAsync('DELETE FROM goals WHERE id = ?', id);
+}
+
+export async function listCheckins(): Promise<GoalCheckin[]> {
+  const db = await getDb();
+  const rows = await db.getAllAsync<{ goal_id: string; at: string; feeling: GoalCheckin['feeling']; note: string | null }>('SELECT * FROM goal_checkins ORDER BY at ASC');
+  return rows.map((r) => ({ goalId: r.goal_id, at: r.at, feeling: r.feeling, note: r.note }));
+}
+
+export async function addCheckin(c: GoalCheckin): Promise<void> {
+  const db = await getDb();
+  await db.runAsync('INSERT INTO goal_checkins (id, goal_id, at, feeling, note) VALUES (?, ?, ?, ?, ?)', newId(), c.goalId, c.at, c.feeling, c.note);
+}
+
+// ---------- conversation with the mascot ----------
+
+export interface ChatMessage {
+  id: string;
+  at: string;
+  role: 'user' | 'assistant';
+  text: string;
+  pageIds: string[];
+  crisis: CrisisLevel;
+}
+
+export async function listChat(limit = 200): Promise<ChatMessage[]> {
+  const db = await getDb();
+  const rows = await db.getAllAsync<{ id: string; at: string; role: 'user' | 'assistant'; text: string; page_ids: string; crisis: CrisisLevel }>(
+    'SELECT * FROM (SELECT * FROM chat_messages ORDER BY at DESC LIMIT ?) ORDER BY at ASC', limit,
+  );
+  return rows.map((r) => ({ id: r.id, at: r.at, role: r.role, text: r.text, pageIds: JSON.parse(r.page_ids) as string[], crisis: r.crisis }));
+}
+
+export async function addChat(m: Omit<ChatMessage, 'id'>): Promise<ChatMessage> {
+  const db = await getDb();
+  const id = newId();
+  await db.runAsync('INSERT INTO chat_messages (id, at, role, text, page_ids, crisis) VALUES (?, ?, ?, ?, ?, ?)', id, m.at, m.role, m.text, JSON.stringify(m.pageIds), m.crisis);
+  return { ...m, id };
+}
+
+export async function clearChat(): Promise<void> {
+  const db = await getDb();
+  await db.runAsync('DELETE FROM chat_messages');
+}
+
 // ---------- key/value ----------
 
 export async function kvGet(key: string): Promise<string | null> {
@@ -411,6 +521,7 @@ export async function wipeAll(): Promise<void> {
   await db.execAsync(`
     DELETE FROM entries; DELETE FROM draft; DELETE FROM entities; DELETE FROM entry_entities;
     DELETE FROM reactions; DELETE FROM letters; DELETE FROM kv;
+    DELETE FROM goals; DELETE FROM goal_checkins; DELETE FROM chat_messages;
   `);
   await db.execAsync('VACUUM');
 }

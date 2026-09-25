@@ -21,7 +21,7 @@ export default function TabLayout() {
       }}>
       <Tabs.Screen name="index" options={{ title: 'Bugün', tabBarIcon: icon('🌱') }} />
       <Tabs.Screen name="timeline" options={{ title: 'Zaman', tabBarIcon: icon('🗓') }} />
-      <Tabs.Screen name="ask" options={{ title: 'Hatırla', tabBarIcon: icon('💭') }} />
+      <Tabs.Screen name="chat" options={{ title: 'Konuş', tabBarIcon: icon('💬') }} />
       <Tabs.Screen name="me" options={{ title: 'Ben', tabBarIcon: icon('📖') }} />
     </Tabs>
   );
