@@ -5,3 +5,5 @@ node_modules/
 dist/
 *.tsbuildinfo
 .DS_Store
+.wrangler/
+.dev.vars

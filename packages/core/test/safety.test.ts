@@ -14,6 +14,10 @@ describe('detectCrisis', () => {
     expect(detectCrisis(text).level).toBe('acute');
   });
 
+  it('still flags real intent next to figurative speech', () => {
+    expect(detectCrisis('Gülmekten öldüm ama gerçekten ölmek istiyorum bazen.').level).toBe('acute');
+  });
+
   it('flags concern', () => {
     expect(detectCrisis('Artık dayanamıyorum, her şey üstüme geliyor').level).toBe('concern');
   });
@@ -23,6 +27,8 @@ describe('detectCrisis', () => {
     'Film çok iyiydi, ölüp bittim gülmekten değil ama eğlendim',
     'Dizide karakter intikam aldı',
     'Olsa da olmasa da fark etmez.',
+    'Utançtan ölmek istiyorum, herkesin önünde düştüm!',
+    'Gülmekten öldüm, sıcaktan ölüyorum burada.',
   ])('does not flag everyday text: %s', (text) => {
     expect(detectCrisis(text).level).toBe('none');
   });

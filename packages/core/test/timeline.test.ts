@@ -51,11 +51,16 @@ describe('future letters', () => {
 });
 
 describe('scenarioEligibility', () => {
-  it('allows light everyday decisions', () => {
-    expect(scenarioEligibility({ text: 'Sabah kahve yerine çay içtim ve otobüse bindim.', privacy: 'ai_full' })).toEqual({ eligible: true });
+  it('plays light everyday decisions for fun', () => {
+    expect(scenarioEligibility({ text: 'Sabah kahve yerine çay içtim ve otobüse bindim.', privacy: 'ai_full' })).toEqual({ eligible: true, mode: 'light' });
   });
-  it('blocks sensitive entries and non-analysable privacy levels', () => {
-    expect(scenarioEligibility({ text: 'Bugün sevgilimle ayrıldık, çok pişmanım.', privacy: 'ai_full' })).toEqual({ eligible: false, reason: 'sensitive' });
+  it('plays breakups and regrets in the careful heartache mode', () => {
+    expect(scenarioEligibility({ text: 'Bugün sevgilimle ayrıldık, çok pişmanım.', privacy: 'ai_full' })).toEqual({ eligible: true, mode: 'heartache' });
+  });
+  it('never plays grief, abuse or crisis, nor non-analysable entries', () => {
+    expect(scenarioEligibility({ text: 'Dedem geçen hafta vefat etti, keşke daha sık gitseydim.', privacy: 'ai_full' })).toEqual({ eligible: false, reason: 'sensitive' });
+    expect(scenarioEligibility({ text: 'Bana şiddet uyguladı, keşke oraya hiç gitmeseydim.', privacy: 'ai_full' })).toEqual({ eligible: false, reason: 'sensitive' });
+    expect(scenarioEligibility({ text: 'Ayrıldık ve artık yaşamak istemiyorum.', privacy: 'ai_full' })).toEqual({ eligible: false, reason: 'sensitive' });
     expect(scenarioEligibility({ text: 'Sabah kahve yerine çay içtim ve otobüse bindim.', privacy: 'ai_read' })).toEqual({ eligible: false, reason: 'privacy' });
   });
 });

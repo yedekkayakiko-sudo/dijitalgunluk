@@ -1,104 +1,112 @@
-import {
-  CRISIS_TEXT,
-  detectCrisis,
-  isSafeMascotText,
-  scenarioEligibility,
-} from '@gunluk/core';
+import { detectCrisis, isSafeMascotText, scenarioEligibility } from '@gunluk/core';
 import { Hono, type Context } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { z } from 'zod';
-import type { Mascot } from './ai';
+import type { Mascot, TextRequest } from './ai';
 import type { Config } from './config';
 import type { Embedder } from './embeddings';
+import { cleanProps, EVENT_NAMES, type EventSink } from './events';
 import {
-  askSystem,
-  EXTRACT_SYSTEM,
-  letterSystem,
-  reactionSystem,
-  scenarioSystem,
+  chatTask,
+  EXTRACT_TASK,
+  letterTask,
+  page,
+  PROFILE_TASK,
+  reactionTask,
+  scenarioTask,
   type Persona,
 } from './prompts';
 
 /*
- * Stateless AI proxy. It keeps the API key off the device, applies the
- * safety rules a second time, and stores nothing: request bodies are never
- * logged or persisted.
+ * Stateless AI proxy. It keeps the API key off the device, re-applies the
+ * safety rules, and stores no diary content: request bodies are never logged
+ * or persisted. The only thing it keeps is anonymous per-day event counts.
  */
 
-const MAX_ENTRY_CHARS = 6000;
+const MAX_TEXT = 6000;
 
 const persona = z.object({
   tone: z.enum(['calm', 'energetic', 'minimal']).default('calm'),
   mascotName: z.string().trim().min(1).max(24).default('Pusula'),
-  userName: z.string().trim().max(40).nullable().default(null),
+  hasName: z.boolean().default(false),
 });
 
-const entryText = z.string().max(MAX_ENTRY_CHARS);
+const text = z.string().max(MAX_TEXT);
+const notes = z.array(z.string().max(200)).max(40).default([]);
 
 const schemas = {
   reaction: persona.extend({
-    kind: z.enum(['new_person', 'short_streak', 'recurring_theme']),
+    kind: z.enum(['new_person', 'short_streak', 'recurring_theme', 'support', 'crisis', 'celebrate']),
     subject: z.string().max(80).nullable(),
-    draft: z.string().max(400),
-    entry: entryText,
+    draft: z.string().max(600),
+    entry: text,
+    notes,
   }),
-  ask: persona.extend({
-    question: z.string().min(1).max(500),
-    entries: z
-      .array(z.object({ id: z.string().max(64), date: z.string().max(40), text: entryText, people: z.array(z.string().max(60)).max(20).default([]) }))
-      .max(8),
+  chat: persona.extend({
+    messages: z
+      .array(z.object({ role: z.enum(['user', 'assistant']), content: z.string().min(1).max(4000) }))
+      .min(1)
+      .max(24)
+      .refine((m) => m[0].role === 'user' && m[m.length - 1].role === 'user', 'must start and end with the user'),
+    notes,
+    goals: z.array(z.string().max(200)).max(5).default([]),
+    pages: z.array(z.object({ id: z.string().max(64), date: z.string().max(40), text })).max(4).default([]),
+    longHeavy: z.boolean().default(false),
   }),
-  extract: z.object({ text: entryText }),
+  extract: z.object({ text }),
+  profile: z.object({
+    notes: z.array(z.object({ category: z.string().max(20), text: z.string().max(200) })).max(40),
+    pages: z.array(z.object({ date: z.string().max(40), text })).min(1).max(8),
+  }),
   letter: persona.extend({
     periodLabel: z.string().max(60),
     topPeople: z.array(z.string().max(60)).max(5),
     topThemes: z.array(z.string().max(60)).max(5),
-    excerpts: z.array(z.object({ date: z.string().max(40), text: entryText })).max(12),
+    excerpts: z.array(z.object({ date: z.string().max(40), text })).max(12),
     fallback: z.string().max(2000),
   }),
-  scenario: persona.extend({ text: entryText }),
-  embed: z.object({ texts: z.array(entryText).min(1).max(32), kind: z.enum(['document', 'query']) }),
+  scenario: persona.extend({ text, notes }),
+  embed: z.object({ texts: z.array(text).min(1).max(32), kind: z.enum(['document', 'query']) }),
   report: z.object({ reason: z.enum(['harmful', 'diagnostic', 'wrong', 'other']), text: z.string().max(2000) }),
+  events: z.object({
+    events: z
+      .array(z.object({ name: z.enum(EVENT_NAMES), day: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), props: z.record(z.string(), z.unknown()).optional() }))
+      .max(100),
+  }),
 };
 
-const AskAnswer = z.object({ answer: z.string(), used_entry_ids: z.array(z.string()) });
-const Extracted = z.object({
-  people: z.array(z.object({ name: z.string() })),
-  places: z.array(z.object({ name: z.string() })),
-});
+const ChatReply = z.object({ reply: z.string(), used_page_ids: z.array(z.string()) });
+const Extracted = z.object({ people: z.array(z.object({ name: z.string() })), places: z.array(z.object({ name: z.string() })) });
+const CATEGORIES = ['kisi', 'durum', 'deger', 'iyi_gelen', 'an', 'zorluk'] as const;
+const ProfileOut = z.object({ notes: z.array(z.object({ category: z.enum(CATEGORIES), text: z.string() })) });
 
-const tag = (name: string, attrs: Record<string, string>, body: string) =>
-  `<${name}${Object.entries(attrs).map(([k, v]) => ` ${k}="${v.replace(/"/g, "'")}"`).join('')}>\n${body.replace(new RegExp(`</?${name}`, 'gi'), '')}\n</${name}>`;
-
-/** Accepts AI text only if it passes the diagnostic-language filter and a length cap. */
-function safeOr(text: string | null, fallback: string, maxLen: number): { text: string; source: 'ai' | 'template' } {
-  if (text && text.length <= maxLen && isSafeMascotText(text)) return { text, source: 'ai' };
-  return { text: fallback, source: 'template' };
-}
+const CHAT_FALLBACK = 'Şu an toparlayamadım, kusura bakma. Bir daha yazar mısın? Buradayım.';
+const RETRY_NOTE = 'Önceki taslağın bir etiket ya da teşhis içeriyordu. Hiçbir etiket kullanmadan, sadece gözlemle yeniden yaz.';
 
 class RateLimiter {
   private hits = new Map<string, number[]>();
   constructor(private perHour: number) {}
   allow(id: string, now = Date.now()): boolean {
     const recent = (this.hits.get(id) ?? []).filter((t) => now - t < 3_600_000);
-    if (recent.length >= this.perHour) {
-      this.hits.set(id, recent);
-      return false;
-    }
-    recent.push(now);
+    const ok = recent.length < this.perHour;
+    if (ok) recent.push(now);
     this.hits.set(id, recent);
     if (this.hits.size > 50_000) this.hits.clear();
-    return true;
+    return ok;
   }
 }
 
 export interface Deps {
   config: Config;
-  mascot: Mascot | null;
+  /** The mascot's voice (Sonnet-class). Null when no API key is configured. */
+  voice: Mascot | null;
+  /** Cheap extraction model (Haiku-class). */
+  fast: Mascot | null;
   embedder: Embedder | null;
+  events: EventSink;
 }
 
-export function createApp({ config, mascot, embedder }: Deps) {
+export function createApp({ config, voice, fast, embedder, events }: Deps) {
   const app = new Hono();
   const limiter = new RateLimiter(config.hourlyLimit);
 
@@ -108,11 +116,12 @@ export function createApp({ config, mascot, embedder }: Deps) {
     return c.json({ error: 'upstream_error' }, 502);
   });
 
-  app.get('/health', (c) => c.json({ ok: true, ai: !!mascot, embeddings: !!embedder }));
+  app.get('/health', (c) => c.json({ ok: true, ai: !!voice, embeddings: !!embedder }));
 
-  app.use('/v1/*', bodyLimit({ maxSize: 128 * 1024 }), async (c, next) => {
+  app.use('/v1/*', bodyLimit({ maxSize: 160 * 1024 }), async (c, next) => {
     if (config.appKey && c.req.header('x-app-key') !== config.appKey) return c.json({ error: 'unauthorized' }, 401);
-    const id = c.req.header('x-install-id') ?? c.req.header('x-forwarded-for') ?? 'anon';
+    if (c.req.path === '/v1/events' || c.req.path === '/v1/stats') return next();
+    const id = c.req.header('x-install-id') ?? c.req.header('cf-connecting-ip') ?? c.req.header('x-forwarded-for') ?? 'anon';
     if (!limiter.allow(id)) return c.json({ error: 'rate_limited' }, 429);
     await next();
   });
@@ -122,65 +131,118 @@ export function createApp({ config, mascot, embedder }: Deps) {
     return parsed.success ? parsed.data : c.json({ error: 'invalid_request' }, 400);
   }
 
-  const needsAI = (c: Context) => c.json({ error: 'ai_unavailable' }, 503);
+  const unavailable = (c: Context) => c.json({ error: 'ai_unavailable' }, 503);
+
+  /** Generates text; if it slips into diagnostic language, asks once more, then gives up (null). */
+  async function safeText(m: Mascot, req: TextRequest, maxLen: number): Promise<string | null> {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const out = await m.text(attempt === 0 ? req : { ...req, task: `${req.task}\n\n${RETRY_NOTE}` });
+      if (out && out.length <= maxLen && isSafeMascotText(out)) return out;
+    }
+    return null;
+  }
 
   app.post('/v1/reaction', async (c) => {
     const b = await body(c, schemas.reaction);
     if (b instanceof Response) return b;
-    if (detectCrisis(b.entry).level !== 'none') return c.json({ error: 'crisis_handled_on_device' }, 422);
-    if (!mascot) return needsAI(c);
-    const prompt = [
-      `Intent: ${b.kind}${b.subject ? ` (about: ${b.subject})` : ''}`,
-      `Safe draft: ${b.draft}`,
-      tag('entry', {}, b.entry),
-    ].join('\n\n');
-    const text = await mascot.text({ system: reactionSystem(b as Persona), prompt, effort: 'low', maxTokens: 2000 });
-    return c.json(safeOr(text, b.draft, 300));
+    if (!voice) return unavailable(c);
+    const intent = b.kind === 'support' && detectCrisis(b.entry).level === 'acute' ? 'crisis' : b.kind;
+    const heavy = intent === 'crisis' || intent === 'support';
+    const out = await safeText(
+      voice,
+      {
+        task: reactionTask(intent, b as Persona, b.subject, b.notes),
+        messages: [{ role: 'user', content: page(b.entry, {}, 'entry') }],
+        effort: heavy ? 'medium' : 'low',
+        maxTokens: heavy ? 4000 : 2000,
+      },
+      heavy ? 700 : 320,
+    );
+    return c.json(out ? { text: out, source: 'ai' } : { text: b.draft, source: 'template' });
   });
 
-  app.post('/v1/ask', async (c) => {
-    const b = await body(c, schemas.ask);
+  app.post('/v1/chat', async (c) => {
+    const b = await body(c, schemas.chat);
     if (b instanceof Response) return b;
-    const crisis = detectCrisis(b.question);
-    if (crisis.level !== 'none') return c.json({ answer: CRISIS_TEXT[crisis.level], entryIds: [], crisis: crisis.level, source: 'template' });
-    const empty = 'Bununla ilgili bir sayfa bulamadım. Belki farklı kelimelerle ya da yaklaşık bir tarih vererek sorabilirsin.';
-    if (b.entries.length === 0) return c.json({ answer: empty, entryIds: [], source: 'template' });
-    if (!mascot) return needsAI(c);
+    if (!voice) return unavailable(c);
+    const crisis = detectCrisis(b.messages[b.messages.length - 1].content).level;
 
-    const pages = b.entries
-      .map((e) => tag('page', { id: e.id, date: e.date, ...(e.people.length ? { people: e.people.join(', ') } : {}) }, e.text))
-      .join('\n\n');
-    const prompt = `${b.userName ? `The user's name is ${b.userName}.\n\n` : ''}${pages}\n\n${tag('question', {}, b.question)}`;
-    const out = await mascot.json({ system: askSystem(b as Persona), prompt, effort: 'medium', maxTokens: 8000, schema: AskAnswer });
-    if (!out) return c.json({ answer: empty, entryIds: [], source: 'template' });
-    const known = new Set(b.entries.map((e) => e.id));
-    const safe = safeOr(out.answer, 'Bu soruya dair sayfaları aşağıda bulabilirsin.', 1200);
-    return c.json({ answer: safe.text, entryIds: out.used_entry_ids.filter((id) => known.has(id)), source: safe.source });
+    const req = {
+      task: chatTask(b as Persona, { notes: b.notes, goals: b.goals, pages: b.pages, crisis: crisis === 'acute', longHeavy: b.longHeavy }),
+      messages: b.messages,
+      effort: crisis === 'none' ? ('low' as const) : ('medium' as const),
+      maxTokens: 6000,
+      schema: ChatReply,
+    };
+    let out = await voice.json(req);
+    if (out && !isSafeMascotText(out.reply)) out = await voice.json({ ...req, task: `${req.task}\n\n${RETRY_NOTE}` });
+    const ok = !!out && out.reply.length <= 3000 && isSafeMascotText(out.reply);
+    const known = new Set(b.pages.map((p) => p.id));
+    return c.json({
+      reply: ok ? out!.reply : CHAT_FALLBACK,
+      usedPageIds: ok ? out!.used_page_ids.filter((id) => known.has(id)) : [],
+      crisis,
+      source: ok ? 'ai' : 'template',
+    });
   });
 
   app.post('/v1/extract', async (c) => {
     const b = await body(c, schemas.extract);
     if (b instanceof Response) return b;
-    if (!mascot) return needsAI(c);
-    const out = await mascot.json({ system: EXTRACT_SYSTEM, prompt: tag('entry', {}, b.text), effort: 'low', maxTokens: 2000, schema: Extracted });
-    const clean = (xs: { name: string }[] = []) => [...new Set(xs.map((x) => x.name.trim()).filter((n) => n.length >= 2 && n.length <= 40))].slice(0, 12);
+    if (!fast) return unavailable(c);
+    const out = await fast.json({
+      task: EXTRACT_TASK,
+      persona: false,
+      messages: [{ role: 'user', content: page(b.text, {}, 'entry') }],
+      effort: 'low',
+      maxTokens: 1500,
+      schema: Extracted,
+    });
+    const clean = (xs: { name: string }[] = []) =>
+      [...new Set(xs.map((x) => x.name.trim()).filter((n) => n.length >= 2 && n.length <= 40))].slice(0, 12);
     return c.json({ people: clean(out?.people), places: clean(out?.places) });
+  });
+
+  app.post('/v1/profile', async (c) => {
+    const b = await body(c, schemas.profile);
+    if (b instanceof Response) return b;
+    if (!voice) return unavailable(c);
+    // Pages with crisis language never become memory notes.
+    const pages = b.pages.filter((p) => detectCrisis(p.text).level === 'none');
+    if (!pages.length) return c.json({ notes: b.notes });
+    const current = b.notes.length ? b.notes.map((n) => `- [${n.category}] ${n.text}`).join('\n') : '(henüz not yok)';
+    const out = await voice.json({
+      task: PROFILE_TASK,
+      persona: false,
+      messages: [{ role: 'user', content: `Mevcut notlar:\n${current}\n\nYeni sayfalar:\n${pages.map((p) => page(p.text, { date: p.date })).join('\n')}` }],
+      effort: 'low',
+      maxTokens: 6000,
+      schema: ProfileOut,
+    });
+    if (!out) return c.json({ notes: b.notes });
+    const cleaned = out.notes
+      .map((n) => ({ category: n.category, text: n.text.trim().slice(0, 200) }))
+      .filter((n) => n.text.length > 3 && isSafeMascotText(n.text))
+      .slice(0, 40);
+    return c.json({ notes: cleaned });
   });
 
   app.post('/v1/letter', async (c) => {
     const b = await body(c, schemas.letter);
     if (b instanceof Response) return b;
-    if (!mascot) return needsAI(c);
+    if (!voice) return unavailable(c);
     const pages = b.excerpts.filter((e) => detectCrisis(e.text).level === 'none');
-    const prompt = [
-      `Period: ${b.periodLabel}`,
-      b.userName ? `Name: ${b.userName}` : 'Name: (none)',
-      `Most mentioned people: ${b.topPeople.join(', ') || '-'}`,
-      `Recurring topics: ${b.topThemes.join(', ') || '-'}`,
-      ...pages.map((e) => tag('page', { date: e.date }, e.text)),
-    ].join('\n\n');
-    const text = await mascot.text({ system: letterSystem(b as Persona), prompt, effort: 'medium', maxTokens: 6000 });
-    return c.json(safeOr(text, b.fallback, 2000));
+    const out = await safeText(
+      voice,
+      {
+        task: letterTask(b as Persona, b.periodLabel, b.topPeople, b.topThemes),
+        messages: [{ role: 'user', content: pages.map((e) => page(e.text, { date: e.date })).join('\n') || '(Bu dönem paylaşılan sayfa yok.)' }],
+        effort: 'medium',
+        maxTokens: 6000,
+      },
+      2000,
+    );
+    return c.json(out ? { text: out, source: 'ai' } : { text: b.fallback, source: 'template' });
   });
 
   app.post('/v1/scenario', async (c) => {
@@ -188,12 +250,26 @@ export function createApp({ config, mascot, embedder }: Deps) {
     if (b instanceof Response) return b;
     const eligibility = scenarioEligibility({ text: b.text, privacy: 'ai_full' });
     if (!eligibility.eligible) return c.json({ error: 'not_eligible', reason: eligibility.reason }, 422);
-    if (!mascot) return needsAI(c);
-    const text = await mascot.text({ system: scenarioSystem(b as Persona), prompt: tag('entry', {}, b.text), effort: 'low', maxTokens: 3000 });
-    if (!text || !isSafeMascotText(text) || scenarioEligibility({ text, privacy: 'ai_full' }).eligible === false) {
-      return c.json({ error: 'not_eligible', reason: 'sensitive' }, 422);
-    }
-    return c.json({ text });
+    if (!voice) return unavailable(c);
+    const out = await safeText(
+      voice,
+      {
+        task: scenarioTask(b as Persona, eligibility.mode, b.notes),
+        messages: [{ role: 'user', content: page(b.text, {}, 'entry') }],
+        effort: eligibility.mode === 'heartache' ? 'medium' : 'low',
+        maxTokens: 5000,
+      },
+      2500,
+    );
+    if (!out) return c.json({ error: 'not_eligible', reason: 'sensitive' }, 422);
+    return c.json({ text: out, mode: eligibility.mode });
+  });
+
+  app.post('/v1/embed', async (c) => {
+    const b = await body(c, schemas.embed);
+    if (b instanceof Response) return b;
+    if (!embedder) return c.json({ error: 'embeddings_unavailable' }, 501);
+    return c.json({ vectors: await embedder.embed(b.texts, b.kind) });
   });
 
   // Google Play AI-content policy: users can flag mascot output. Only the mascot's text is sent, never the diary page.
@@ -204,11 +280,17 @@ export function createApp({ config, mascot, embedder }: Deps) {
     return c.body(null, 204);
   });
 
-  app.post('/v1/embed', async (c) => {
-    const b = await body(c, schemas.embed);
+  app.post('/v1/events', async (c) => {
+    const b = await body(c, schemas.events);
     if (b instanceof Response) return b;
-    if (!embedder) return c.json({ error: 'embeddings_unavailable' }, 501);
-    return c.json({ vectors: await embedder.embed(b.texts, b.kind) });
+    await events.add(b.events.map((e) => ({ day: e.day, name: e.name, props: cleanProps(e.props) })));
+    return c.body(null, 204);
+  });
+
+  app.get('/v1/stats', async (c) => {
+    if (!config.adminKey || c.req.header('x-admin-key') !== config.adminKey) return c.json({ error: 'unauthorized' }, 401);
+    const since = c.req.query('since') ?? new Date(Date.now() - 30 * 86_400_000).toISOString().slice(0, 10);
+    return c.json({ rows: await events.summary(since) });
   });
 
   return app;

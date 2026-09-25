@@ -1,14 +1,24 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { betaZodOutputFormat } from '@anthropic-ai/sdk/helpers/beta/zod';
 import type { z } from 'zod';
+import { PERSONA } from './persona.generated';
 
 export type Effort = 'low' | 'medium' | 'high';
 
+export interface Turn {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
 export interface TextRequest {
-  system: string;
-  prompt: string;
+  /** Route-specific instructions, placed after the (cached) persona. */
+  task: string;
+  /** The conversation; a single user turn for one-shot routes. */
+  messages: Turn[];
   effort: Effort;
   maxTokens?: number;
+  /** Include the mascot persona (default true). Extraction skips it to stay cheap. */
+  persona?: boolean;
 }
 
 export interface JsonRequest<S extends z.ZodType> extends TextRequest {
@@ -35,6 +45,15 @@ export class ClaudeMascot implements Mascot {
   }
 
   private base(req: TextRequest) {
+    // The persona is identical for every user and route, so it is cached once and
+    // read back at a fraction of the price; everything that varies comes after it.
+    const system =
+      req.persona === false
+        ? req.task
+        : [
+            { type: 'text' as const, text: PERSONA, cache_control: { type: 'ephemeral' as const } },
+            { type: 'text' as const, text: req.task },
+          ];
     // `effort` is rejected by Haiku 4.5; server-side fallbacks apply to the Opus/Fable tier.
     const effort = this.model.startsWith('claude-haiku') ? {} : { effort: req.effort };
     const fallback = FALLBACK_MODELS.has(this.model)
@@ -43,10 +62,9 @@ export class ClaudeMascot implements Mascot {
     return {
       model: this.model,
       max_tokens: req.maxTokens ?? 4000,
-      system: req.system,
-      messages: [{ role: 'user' as const, content: req.prompt }],
+      system,
+      messages: req.messages,
       output_config: effort,
-      // If a safety classifier declines, let the API retry on its recommended fallback model.
       ...fallback,
     };
   }

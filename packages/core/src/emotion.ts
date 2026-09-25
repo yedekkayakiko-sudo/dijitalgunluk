@@ -31,26 +31,44 @@ export function extractThemes(text: string): string[] {
   return Object.keys(THEME_PATTERNS).filter((id) => matchAny(t, THEME_PATTERNS[id]).length > 0);
 }
 
-const HEAVY = [
-  'agladim', 'agliyorum', 'aglamak', 'mahvoldum', 'berbat', 'nefret', 'cok kotu', 'cok uzgun',
-  'kirildim', 'kirgin', 'ofkeli', 'sinirliyim', 'patladim', 'bunaldim', 'daraldim', 'bogul',
-  'dayanamiyorum', 'cok yalniz', 'bikt', 'usandim', 'caresiz', 'panik', 'titriyorum',
-  'harika', 'muhtesem', 'inanilmaz', 'cok mutlu', 'ucuyorum', 'hayatimin en',
+const NEGATIVE = [
+  'agladim', 'agliyorum', 'aglamak', 'mahvoldum', 'berbat', 'nefret', 'cok kotu', 'cok uzgun', 'uzgunum',
+  'kirildim', 'kirgin', 'ofkeli', 'sinirliyim', 'patladim', 'bunaldim', 'daraldim', 'bogul', 'yikildim',
+  'dayanamiyorum', 'cok yalniz', 'bikt', 'usandim', 'caresiz', 'panik', 'titriyorum', 'hayal kirikli', 'bos hissed',
+].map(phrase);
+
+const POSITIVE = [
+  'harika', 'muhtesem', 'inanilmaz guzel', 'cok mutlu', 'mutluyum', 'ucuyorum', 'hayatimin en guzel', 'cok guzel',
+  'basardim', 'kazandim', 'gurur duy', 'heyecanli', 'sahane', 'bayildim', 'cok eglen', 'kahkaha',
 ].map(phrase);
 
 const INTENSIFIERS = ['cok', 'asiri', 'fazlasiyla', 'resmen', 'hic', 'gercekten', 'inanilmaz'].map(phrase);
 
+export interface EmotionalTone {
+  /** 0..1 overall charge */
+  intensity: number;
+  /** 0..1 weight of hard feelings */
+  negative: number;
+  /** 0..1 weight of joyful feelings */
+  positive: number;
+}
+
 /**
- * 0..1 score of how emotionally charged the text reads. Not a judgement,
- * just a signal for when an observational comment might be welcome.
+ * How emotionally charged the text reads, and in which direction. Not a
+ * judgement, just a signal for when a friendly word might be welcome.
  */
-export function emotionalIntensity(text: string): number {
+export function emotionalTone(text: string): EmotionalTone {
   const t = fold(text);
-  let score = 0;
-  score += Math.min(matchAny(t, HEAVY).length, 4) * 0.2;
-  score += Math.min(matchAny(t, INTENSIFIERS).length, 3) * 0.07;
-  score += Math.min((text.match(/!/g) ?? []).length, 3) * 0.05;
-  const shouting = text.match(/\b[A-ZÇĞİÖŞÜ]{4,}\b/g);
-  if (shouting) score += 0.1;
-  return Math.min(1, score);
+  const neg = Math.min(matchAny(t, NEGATIVE).length, 4);
+  const pos = Math.min(matchAny(t, POSITIVE).length, 4);
+  let boost = Math.min(matchAny(t, INTENSIFIERS).length, 3) * 0.07;
+  boost += Math.min((text.match(/!/g) ?? []).length, 3) * 0.05;
+  if (text.match(/\b[A-ZÇĞİÖŞÜ]{4,}\b/g)) boost += 0.1;
+  const negative = neg ? Math.min(1, neg * 0.25 + boost) : 0;
+  const positive = pos ? Math.min(1, pos * 0.25 + boost) : 0;
+  return { intensity: Math.min(1, (neg + pos) * 0.2 + boost), negative, positive };
+}
+
+export function emotionalIntensity(text: string): number {
+  return emotionalTone(text).intensity;
 }

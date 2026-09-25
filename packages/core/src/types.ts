@@ -40,6 +40,8 @@ export interface Entity {
 
 export type ReactionKind =
   | 'crisis'
+  | 'support'
+  | 'celebrate'
   | 'new_person'
   | 'short_streak'
   | 'recurring_theme'

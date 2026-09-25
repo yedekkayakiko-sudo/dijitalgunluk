@@ -1,0 +1,20 @@
+# Cloudflare Workers deployment. See docs/DEPLOY.md.
+name = "pusula-gunluk"
+main = "src/worker.ts"
+compatibility_date = "2026-09-01"
+compatibility_flags = ["nodejs_compat"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "pusula-events"
+# Replace with the id printed by: npx wrangler d1 create pusula-events
+database_id = "00000000-0000-0000-0000-000000000000"
+migrations_dir = "migrations"
+
+[vars]
+CLAUDE_MODEL_VOICE = "claude-sonnet-5"
+CLAUDE_MODEL_FAST = "claude-haiku-4-5"
+HOURLY_LIMIT = "60"
+
+# Secrets (never in this file): npx wrangler secret put ANTHROPIC_API_KEY
+# Optional secrets: APP_KEY, ADMIN_KEY, VOYAGE_API_KEY

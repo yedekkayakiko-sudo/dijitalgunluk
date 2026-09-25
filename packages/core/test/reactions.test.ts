@@ -24,11 +24,35 @@ describe('decideReaction', () => {
     expect(decideReaction(base({})).kind).toBe('none');
   });
 
-  it('always answers a crisis, even for private entries, without AI', () => {
+  it('always answers a crisis, even for private entries, with on-device words only', () => {
     const d = decideReaction(base({ entry: e('yaşamak istemiyorum', 0, { privacy: 'private' }) }));
     expect(d.kind).toBe('crisis');
     expect(d.aiAllowed).toBe(false);
     expect(d.text).toContain('112');
+  });
+
+  it('lets the AI answer a crisis like a friend when the entry allows it', () => {
+    const d = decideReaction(base({ entry: e('yaşamak istemiyorum', 0), pastReactions: [{ kind: 'crisis', at: hoursAgo(1) }] }));
+    expect(d).toMatchObject({ kind: 'crisis', crisisLevel: 'acute', aiAllowed: true });
+  });
+
+  it('meets venting ("dayanamıyorum") with support, not an emergency', () => {
+    const d = decideReaction(base({ entry: e('Artık dayanamıyorum bu işe, her gün aynı şey.', 0) }));
+    expect(d).toMatchObject({ kind: 'support', crisisLevel: 'concern' });
+    expect(d.text).not.toContain('112');
+  });
+
+  it('notices a hard day even right after another reaction', () => {
+    const d = decideReaction(base({
+      entry: e('Bugün çok kötü geçti, eve gelince ağladım. Kırıldım, bunaldım.', 0),
+      pastReactions: [{ kind: 'new_person', at: hoursAgo(2), subject: 'Ali' }],
+    }));
+    expect(d.kind).toBe('support');
+  });
+
+  it('sometimes celebrates a joyful day', () => {
+    const d = decideReaction(base({ entry: e('Bugün terfi aldım, çok mutluyum! Harika bir gündü, akşam kutladık.', 0) }));
+    expect(d.kind).toBe('celebrate');
   });
 
   it('does not analyse private or read-only entries', () => {
