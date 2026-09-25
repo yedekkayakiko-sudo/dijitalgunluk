@@ -68,6 +68,13 @@ mobile          Expo (React Native) SDK 57 uygulaması.
 
 **Maliyet:** 100 kullanıcıda gerçekçi senaryoda ayda ~$15–30. Anthropic konsolundaki harcama limiti asıl sigortadır; limit dolarsa maskot hazır metinlere geçer, uygulama bozulmaz. Ayrıntı: [docs/URUN.md](docs/URUN.md).
 
+## Bilgisayarda tek tıkla dene (yazılım bilgisi gerekmez)
+
+1. [nodejs.org](https://nodejs.org) adresinden Node.js'i (LTS) kur.
+2. Bu projeyi ZIP olarak indirip bir klasöre çıkar.
+3. **Windows:** `PUSULA-DENE-Windows.bat` dosyasına çift tıkla. **Mac:** `PUSULA-DENE-Mac.command` dosyasına sağ tıkla → Aç.
+4. Tarayıcında uygulama açılır (açılmazsa `http://localhost:8081`). Maskot hazır cevaplarla konuşur; ücret yok.
+
 ## Çalıştırma
 
 ```bash
