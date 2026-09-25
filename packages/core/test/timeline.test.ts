@@ -44,6 +44,9 @@ describe('future letters', () => {
     expect(isOpenable({ openAt }, now)).toBe(false);
     expect(isOpenable({ openAt }, new Date('2027-09-26'))).toBe(true);
     expect(timeUntil(openAt, now)).toBe('1 yıl');
+    expect(timeUntil(openAt, new Date(now.getTime() + 5_000))).toBe('1 yıl');
+    expect(timeUntil(openDateFor(3, now).toISOString(), new Date('2026-09-20T12:00:00'))).toBe('3 ay 5 gün');
+    expect(timeUntil(new Date('2026-10-05T09:00:00').toISOString(), now)).toBe('10 gün');
   });
 });
 

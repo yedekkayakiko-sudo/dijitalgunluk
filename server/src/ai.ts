@@ -21,6 +21,8 @@ export interface Mascot {
   json<S extends z.ZodType>(req: JsonRequest<S>): Promise<z.infer<S> | null>;
 }
 
+const FALLBACK_MODELS = new Set(['claude-opus-5', 'claude-opus-5-5', 'claude-fable-5', 'claude-fable-5-1']);
+
 /**
  * Claude-backed implementation. Returns null (never throws for model-side
  * declines) so callers can fall back to on-device templates.
@@ -33,15 +35,19 @@ export class ClaudeMascot implements Mascot {
   }
 
   private base(req: TextRequest) {
+    // `effort` is rejected by Haiku 4.5; server-side fallbacks apply to the Opus/Fable tier.
+    const effort = this.model.startsWith('claude-haiku') ? {} : { effort: req.effort };
+    const fallback = FALLBACK_MODELS.has(this.model)
+      ? { betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' as const }
+      : {};
     return {
       model: this.model,
       max_tokens: req.maxTokens ?? 4000,
       system: req.system,
       messages: [{ role: 'user' as const, content: req.prompt }],
-      output_config: { effort: req.effort },
+      output_config: effort,
       // If a safety classifier declines, let the API retry on its recommended fallback model.
-      betas: ['server-side-fallback-2026-07-01'],
-      fallbacks: 'default' as const,
+      ...fallback,
     };
   }
 

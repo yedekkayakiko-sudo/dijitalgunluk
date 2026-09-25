@@ -62,6 +62,16 @@ describe('/v1/scenario', () => {
   });
 });
 
+describe('/v1/report', () => {
+  it('accepts a report of mascot output', async () => {
+    const { post } = setup();
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+    expect((await post('/v1/report', { reason: 'diagnostic', text: 'Bence depresyondasın.' })).status).toBe(204);
+    expect(log).toHaveBeenCalledOnce();
+    log.mockRestore();
+  });
+});
+
 describe('middleware', () => {
   it('requires the app key when configured', async () => {
     const { post } = setup({}, { APP_KEY: 'secret' });

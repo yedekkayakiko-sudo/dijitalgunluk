@@ -58,6 +58,7 @@ const schemas = {
   }),
   scenario: persona.extend({ text: entryText }),
   embed: z.object({ texts: z.array(entryText).min(1).max(32), kind: z.enum(['document', 'query']) }),
+  report: z.object({ reason: z.enum(['harmful', 'diagnostic', 'wrong', 'other']), text: z.string().max(2000) }),
 };
 
 const AskAnswer = z.object({ answer: z.string(), used_entry_ids: z.array(z.string()) });
@@ -193,6 +194,14 @@ export function createApp({ config, mascot, embedder }: Deps) {
       return c.json({ error: 'not_eligible', reason: 'sensitive' }, 422);
     }
     return c.json({ text });
+  });
+
+  // Google Play AI-content policy: users can flag mascot output. Only the mascot's text is sent, never the diary page.
+  app.post('/v1/report', async (c) => {
+    const b = await body(c, schemas.report);
+    if (b instanceof Response) return b;
+    console.log(JSON.stringify({ type: 'ai_report', at: new Date().toISOString(), reason: b.reason, text: b.text }));
+    return c.body(null, 204);
   });
 
   app.post('/v1/embed', async (c) => {
