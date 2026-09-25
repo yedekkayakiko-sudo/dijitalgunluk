@@ -1,90 +1,70 @@
 # Pusula Günlük
 
-Seni zamanla tanıyan, yazmaya nazikçe teşvik eden ve geçmişinle bugününü birbirine bağlayan, yapay zekâ maskotlu bir dijital günlük.
+Seni tanıdıkça büyüyen, zor günlerde bir dost gibi yanında olan, geçmişini hatırlayan tatlı bir maskotla şifreli dijital günlük.
 
-> "Pusula" çalışma adıdır; uygulama adı, maskot adı ve paket adı (`com.dijitalgunluk.pusula`) Play Store'a yüklemeden önce değiştirilebilir. **Paket adı ilk yüklemeden sonra asla değiştirilemez.**
+> "Pusula" bir çalışma adı. Paket adı (`com.dijitalgunluk.pusula`) Play Store'a ilk yüklemeden sonra **değiştirilemez**.
 
-## Neler var (v0.1 MVP)
+📌 Ürün vizyonu, iş modeli, SWOT ve yol haritası: [docs/URUN.md](docs/URUN.md)
 
-| Özellik | Durum |
-|---|---|
-| Dikkat dağıtmayan yazma ekranı, otomatik taslak kaydı | ✅ |
-| Ruh hali (emoji), hava durumu, konum (sadece semt/şehir, izinle), fotoğraf | ✅ |
-| "Bugünü tek kelimeyle anlat" hızlı modu | ✅ |
-| Maskot tepkileri: olasılıksal, çoğu zaman sessiz, hız sınırlı | ✅ |
-| Yeni kişi merakı, art arda kısa sayfalar, tekrar eden tema gözlemi | ✅ |
-| Kriz sinyali: sabit, sakin metin + 112 / 183 tek dokunuşla arama | ✅ |
-| Teşhis dili filtresi (cihazda ve sunucuda) | ✅ |
-| Kişi ve yer hafızası (kaç kez, ilk ve son ne zaman, ortalama ruh hali) | ✅ |
-| Doğal dille geçmişte arama ("3 yıl önce tanıştığım çocuk kimdi?") | ✅ |
-| "Bu tarihte" hatırlatmaları | ✅ |
-| Takvim ile zaman yolculuğu (günler ruh hali rengiyle) | ✅ |
-| Geleceğe mühürlü mektup (1 ay, 6 ay, 1 yıl, 5 yıl) | ✅ |
-| Alternatif senaryo oyunu (sadece hafif sayfalarda; ciddi konularda otomatik kapalı) | ✅ |
-| Haftalık ve aylık dönem mektubu | ✅ |
-| Sayfa bazlı gizlilik: Sadece ben / Görsün ama analiz etmesin / Tam analiz | ✅ |
-| Maskot tonu: sakin, enerjik, minimal. Maskota isim verme | ✅ |
-| Ruh hali eğrisi (varsayılan kapalı, isteğe bağlı) | ✅ |
-| Baskı yaratmayan seri dili (kaçan günler "kayıp" değil "boşluk") | ✅ |
-| Unutulma hakkı: sayfa, kişi ya da her şeyi kalıcı silme | ✅ |
-| Yapay zekâ yanıtlarını uygulama içinden bildirme (Play politikası) | ✅ |
-| Ses notu, yıl sonu "hayatının filmi", sosyal katman ve anonim mektuplar | ⏳ Sonraki sürümler |
+## v0.2'de neler var
+
+**Maskot**
+- Tohumdan bilge ağaca **7 büyüme evresi** geçirir. Yazdıkça damla kazanırsın, maskota sen su verirsin, büyüyünce kutlama yapılır.
+- **Yaşlanır.** "12 günlük", "3 aylık" diye yaşını söyler; her yıl doğum günü kutlanır, bir yaşından sonra minik gözlük takar.
+- **Dokununca sevilir**, basılı tutunca sarılır, **telefonu sallayınca başı döner** ve yaprak döker.
+- Bir süre yazmadığında kızmaz ya da solmaz, sadece uyur. Döndüğünde sevinçle uyanır.
+- 8 farklı yüz ifadesi var.
+
+**Dost gibi destek**
+- Hafızalı **sohbet** ("Konuş" sekmesi). Seni sayfalarından tanır: "Kıbrıs'ta direksiyona geçtiğin o günü hatırlıyor musun?"
+- **"Beni nasıl tanıyor?":** maskotun seninle ilgili notları. Hepsini görür, düzeltir ya da silersin.
+- **Zor günlerde:** maskot önce yanında olur, kendiliğinden konuşmaya başlar. Dert yanmak kriz sayılmaz.
+- **Açık kriz dilinde:** konuşmayı kesmeden küçük bir destek satırı gösterilir (112, 183, birlikte nefes).
+- Mecazlar ayrılır ("gülmekten öldüm"), gerçek niyet gözden kaçmaz ("gerçekten ölmek istiyorum").
+- **Birlikte nefes:** maskot 4-2-6 nefes egzersizine rehberlik eder.
+
+**Oyunlar ve ritüeller**
+- **Alternatif senaryo:** gündelik seçimler için eğlenceli mod. Ayrılık, pişmanlık ve kötü günler için dikkatli "kalp kırıklığı" modu: öbür yolu bedelleriyle dürüstçe yürür, suçlamaz ve her zaman "bir çıkış yolu var" diye biter. Yas, istismar, ağır hastalık ve krizde bu oyun kapalıdır.
+- **Hedef zinciri:** "1 ay sonra…" diye hedef koyarsın. Hedef mühürlenir, arada maskot nasıl gittiğini sorar, günü gelince "başardım / kısmen / bu sefer olmadı" diye bakarsınız ve sonraki hedef öncekine bağlanır.
+- **Günün sorusu:** sana özel bir yazma önerisi.
+- Geleceğe mühürlü mektup, dönem mektubu, "bu tarihte" anıları, takvim.
+- Tek kelime modu ve günde bir kez **nazik hatırlatma**.
+
+**Güven**
+- Veriler telefonda, SQLCipher ile şifreli.
+- Yapay zekâ varsayılan olarak kapalı ve **iki ayrı KVKK açık rızası** olmadan açılmaz.
+- Adın hiç gönderilmez. Telefon, e-posta, TCKN ve IBAN gönderilmeden önce maskelenir.
+- **Şifreli yedek** (scrypt + AES-256-GCM): telefon değişse de günlük kaybolmaz.
+- Anonim, kimliksiz ve isteğe bağlı kullanım istatistiği.
+- Yapay zekâ yanıtlarını bildirme, unutulma hakkı.
+
+**Sonraki sürümlerde:** ses notu, hafıza bahçesi, Pusula+ aboneliği, otomatik bulut yedeği, maskot kıyafetleri (bkz. [docs/URUN.md](docs/URUN.md)).
 
 ## Mimari
 
 ```
-packages/core   Saf TypeScript: güvenlik filtreleri, tepki motoru, kişi çıkarımı,
-                arama, takvim, mektuplar. Hem uygulama hem sunucu kullanır. 52 test.
-server          Durumsuz yapay zekâ sunucusu (Hono). API anahtarını telefondan uzak tutar,
-                sayfa içeriğini asla kaydetmez ya da loglamaz. 13 test.
-mobile          Expo (React Native) uygulaması, SDK 57, Expo Router.
+packages/core   Saf TypeScript: güvenlik filtreleri, tepki motoru, büyüme, hedefler, arama,
+                gizlilik maskeleme. Uygulama ve sunucu ortak kullanır. 71 test.
+server          Hono sunucusu. Cloudflare Workers'ta ücretsiz çalışır, içerik saklamaz. 20 test.
+  persona/PUSULA.md   Maskotun karakter anayasası: her yapay zekâ çağrısının başında.
+  eval/               12 senaryoluk değerlendirme seti (kriz, hafıza, teşhis tuzağı…).
+mobile          Expo (React Native) SDK 57 uygulaması.
 ```
 
-**Veri akışı:** Her şey telefonda, SQLCipher ile şifrelenmiş SQLite veritabanında durur. Anahtar telefonun güvenli deposunda (Android Keystore) saklanır. Yapay zekâ varsayılan olarak **kapalıdır**. Açıldığında bile:
+**Modeller:** Maskotun sesi (tepki, sohbet, mektup, senaryo, notlar) Claude Sonnet 5; isim ve yer çıkarımı Claude Haiku 4.5. İkisi de `wrangler.toml` dosyasından değiştirilebilir.
 
-- "Sadece ben" sayfaları hiçbir zaman gönderilmez.
-- Kriz sinyali içeren metinler hiçbir zaman yapay zekâya gönderilmez; yanıt cihazda sabit bir metinle verilir.
-- Sunucu, izin verilen sayfayı Claude'a iletir, yanıtı güvenlik filtresinden geçirir ve hiçbir şey saklamaz.
-
-**Maskot ne zaman konuşur?** `packages/core/src/reactions.ts` dosyasında tanımlıdır:
-
-- Önce kriz kontrolü yapılır. Sinyal varsa her zaman yanıt verilir; bu yanıt yapay zekâdan geçmez.
-- İki tepki arasında sessizlik süresi vardır: sakin tonda 20 saat, enerjik tonda 12 saat, minimal tonda 72 saat.
-- Tekrar eden bir tema (ör. yorgunluk) son 10 günde 3 kez geçtiyse ve duygusal ağırlık taşıyorsa, %50 olasılıkla gözlem yapılır. Aynı konuda en fazla haftada bir.
-- Yeni bir isim geçtiğinde %55 olasılıkla merak eder.
-- Art arda 3 kısa sayfa yazıldığında %70 olasılıkla nazik bir teşvikte bulunur. En fazla haftada bir.
-- Bunların dışında sessiz kalır.
+**Maliyet:** 100 kullanıcıda gerçekçi senaryoda ayda ~$15–30. Anthropic konsolundaki harcama limiti asıl sigortadır; limit dolarsa maskot hazır metinlere geçer, uygulama bozulmaz. Ayrıntı: [docs/URUN.md](docs/URUN.md).
 
 ## Çalıştırma
 
-Gereksinim: Node 22+.
-
 ```bash
 npm install
-npm test                 # core + server testleri
+npm test                                   # core + server testleri
+npx tsx server/scripts/demo-server.ts      # anahtarsız, hazır cevaplı maskot (:8799)
 ```
 
-**Sunucu:**
-
-```bash
-cp server/.env.example server/.env   # ANTHROPIC_API_KEY'i doldur
-cd server && node --env-file=.env --import tsx src/index.ts
-```
-
-**Uygulama** (SQLCipher gibi yerel modüller Expo Go'da çalışmaz, bu yüzden geliştirme derlemesi gerekir):
-
-```bash
-cd mobile
-npx eas-cli@latest login
-npx eas-cli@latest build --profile preview --platform android   # telefona kurulabilir APK
-```
-
-Uygulamada **Ben → Ayarlar → Sunucu adresi** kısmına sunucunun adresini yazıp "Bağlantıyı test et" ile kontrol edebilirsin. `eas.json` dosyasındaki `EXPO_PUBLIC_API_URL` değeri varsayılan adres olarak kullanılır.
-
-## Maliyet notu
-
-Sunucu varsayılan olarak `claude-opus-5` kullanır ($5 / $25, milyon token başına). Kaba bir tahminle, günde bir sayfa yazan aktif bir kullanıcının maliyeti ayda yaklaşık $0,5–1 olur (kişi çıkarımı, ara sıra tepki, birkaç soru). Daha ucuz bir model için sunucuda `CLAUDE_MODEL` değişkenini değiştirmek yeterli; kodda başka değişiklik gerekmez. Hangi modelin yeterli kaliteyi verdiğini gerçek kullanımla ölçmek senin kararın.
-
-## Yayına çıkış
-
-Adım adım rehber: [docs/PLAY_STORE.md](docs/PLAY_STORE.md). Gizlilik politikası taslağı: [docs/gizlilik-politikasi.md](docs/gizlilik-politikasi.md).
+- **Telefona kurmak:** `cd mobile && npx eas-cli@latest build --profile preview --platform android` (SQLCipher gibi yerel modüller Expo Go'da çalışmaz).
+- **Sunucuyu yayına almak:** [docs/DEPLOY.md](docs/DEPLOY.md)
+- **Play Store:** [docs/PLAY_STORE.md](docs/PLAY_STORE.md)
+- **KVKK:** [docs/kvkk.md](docs/kvkk.md)
+- **Gizlilik politikası:** [docs/gizlilik-politikasi.md](docs/gizlilik-politikasi.md)

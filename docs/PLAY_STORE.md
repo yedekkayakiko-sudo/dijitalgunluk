@@ -6,7 +6,9 @@ Bu liste Eylül 2026 itibarıyla hazırlandı. Google kuralları sık değişir;
 
 - [ ] **Uygulama adı** (Play'de en fazla 30 karakter). Çalışma adı: "Pusula Günlük".
 - [ ] **Paket adı:** `mobile/app.json` içindeki `android.package`. Şu an `com.dijitalgunluk.pusula`. **İlk yüklemeden sonra değiştirilemez.**
-- [ ] **Sunucu nereye kurulacak?** Örnekler: Fly.io, Render, Railway. `server/Dockerfile` hazır. Sunucunun adresini `mobile/eas.json` dosyasındaki `EXPO_PUBLIC_API_URL` alanına yaz.
+- [ ] **Sunucu:** Cloudflare Workers'ın ücretsiz planı ([docs/DEPLOY.md](DEPLOY.md)). Sunucunun adresini ve `APP_KEY` değerini `mobile/eas.json` dosyasına yaz.
+- [ ] **Anthropic harcama limiti:** Konsolda aylık limit koy (örneğin $30).
+- [ ] **KVKK:** `mobile/src/lib/legal.ts` içindeki `[KÖŞELİ PARANTEZ]` alanlarını doldur ve [docs/kvkk.md](kvkk.md) dosyasıyla bir avukata danış.
 - [ ] **Kriz hatları:** `packages/core/src/safety.ts` içindeki `CRISIS_RESOURCES` listesindeki numaraları yayından önce doğrula (112 ve ALO 183).
 
 ## 1. Geliştirici hesabı
@@ -40,17 +42,29 @@ npx eas-cli@latest build --profile production --platform android   # Play için 
 | Hedef kitle | **18 ve üzeri.** Uygulama zaten açılışta 18+ onayı istiyor. |
 | Veri güvenliği | Aşağıdaki bölüme bak. |
 | Sağlık uygulamaları beyanı | Ruh hali takibi nedeniyle bu form sorulabilir. "Tıbbi cihaz değil, teşhis koymaz" diye beyan et. |
-| Yapay zekâ ile üretilen içerik | Uygulama içinden bildirme var: maskot mesajlarının altındaki "⚑ Bildir". |
+| Yapay zekâ ile üretilen içerik | Uygulama içinden bildirme var: maskot mesajlarındaki "⚑ Bildir" düğmesi, sohbette de mesaja basılı tutmak. |
 
 ### Veri güvenliği formu (taslak yanıtlar)
 
-- **Veri toplanıyor mu?** Evet, ama sadece yapay zekâ açıkken ve sadece kullanıcının izin verdiği sayfalar için. Bunlar işlenip atılır, saklanmaz.
-  - *Kişisel bilgiler / Diğer kullanıcı içeriği (günlük metni):* toplanıyor, geçici işleniyor, paylaşılmıyor (hizmet sağlayıcı Anthropic, "service provider" sayılır), isteğe bağlı.
-  - *Fotoğraflar:* cihazdan çıkmıyor, toplanmıyor.
-  - *Konum:* sadece "semt, şehir" etiketi cihazda saklanıyor, sunucuya gönderilmiyor. Bu sayfa yapay zekâya gönderilirse etiket gitmez; sadece metin gider.
-  - *Uygulama etkinliği / tanımlayıcılar:* rastgele bir kurulum kimliği yalnızca hız sınırlaması için kullanılıyor.
-- **Aktarım sırasında şifreleniyor mu?** Evet (HTTPS). Sunucun HTTPS kullanmalı.
+- **Veri toplanıyor mu?** Yalnızca kullanıcı yapay zekâyı açarsa (iki açık rızayla). Veriler işlenip atılır, saklanmaz.
+  - *Kişisel bilgiler → Diğer kullanıcı içeriği* (günlük metni, sohbet mesajları, maskot notları): toplanıyor, geçici olarak işleniyor, isteğe bağlı. Anthropic hizmet sağlayıcıdır (service provider), paylaşım sayılmaz.
+  - *Sağlık ve fitness:* Ruh hali seçimleri cihazdan çıkmaz. Günlük metni duygu içerebilir; bunu "Diğer kullanıcı içeriği" altında beyan et ve açıklamada belirt.
+  - *Fotoğraflar, konum:* cihazdan çıkmıyor, toplanmıyor.
+  - *Uygulama etkinliği:* Anonim istatistikler isteğe bağlı, kimliksiz ve toplu sayılardır. Şeffaflık için "Uygulama etkileşimleri → Analiz" olarak beyan etmen önerilir.
+  - *Cihaz kimlikleri:* Rastgele kurulum kimliği yalnızca hız sınırı için kullanılıyor ve saklanmıyor ("Güvenlik, dolandırıcılık önleme").
+- **Aktarım sırasında şifreleniyor mu?** Evet (HTTPS; Cloudflare varsayılan olarak zorunlu tutar).
 - **Kullanıcı verilerinin silinmesini isteyebilir mi?** Evet: uygulama içinden anında ve kalıcı olarak.
+
+### İzinler (hepsi isteğe bağlı, gerektiği an sorulur)
+
+| İzin | Neden |
+|---|---|
+| Bildirimler | Günlük nazik hatırlatma, mektup ve hedef günleri |
+| Yaklaşık konum | Sayfaya "Kadıköy, İstanbul" gibi bir etiket eklemek için. Hassas konum engellendi. |
+| Fotoğraflar | Sayfaya fotoğraf eklemek (Android'in fotoğraf seçicisi) |
+| Hareket sensörü | Telefonu sallayınca maskotun başının dönmesi (izin gerektirmez) |
+
+Kamera, mikrofon, kişiler, arka planda konum ve fiziksel aktivite izinleri `app.json` dosyasında engellendi.
 
 ## 4. Mağaza sayfası
 
@@ -67,8 +81,14 @@ npx eas-cli@latest build --profile production --platform android   # Play için 
 
 ## 6. Yayından önce son kontrol
 
-- [ ] Sunucuda `ANTHROPIC_API_KEY` ve `APP_KEY` ayarlı, HTTPS açık.
+- [ ] Sunucuda `ANTHROPIC_API_KEY`, `APP_KEY` ve `ADMIN_KEY` ayarlı; Anthropic harcama limiti tanımlı.
+- [ ] Değerlendirme seti gerçek modelle geçti: `npm run eval -w server -- --yes`.
 - [ ] Kriz numaraları doğrulandı.
 - [ ] Gizlilik politikası URL'si çalışıyor ve uygulamadaki metinle tutarlı.
-- [ ] Gerçek bir Android telefonda: sayfa yaz, fotoğraf ekle, uygulamayı kapatıp aç (taslak geri geliyor mu?), "tüm verilerimi sil" çalışıyor mu?
+- [ ] Gerçek bir Android telefonda:
+  - Sayfa yaz ve fotoğraf ekle. Uygulamayı kapatıp aç: taslak geri geliyor mu?
+  - Maskota su ver, telefonu salla.
+  - Şifreli yedek al, yeni kurulumda geri yükle.
+  - Bildirim geliyor mu?
+  - "Tüm verilerimi sil" çalışıyor mu?
 - [ ] Yapay zekâ kapalıyken uygulama tamamen çalışıyor mu? (Çalışması gerekir.)
