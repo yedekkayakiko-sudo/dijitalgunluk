@@ -93,3 +93,16 @@ export function ageOf(bornAt: string | null, now: Date = new Date()): Age | null
   const birthdayToday = days > 0 && today.getDate() === start.getDate() && (years >= 1 ? today.getMonth() === start.getMonth() : true);
   return { days, label, years: Math.max(0, years), birthdayToday };
 }
+
+export type Season = 'winter' | 'spring' | 'summer' | 'autumn';
+
+/** Northern-hemisphere seasons, for the mascot's little accessories. */
+export function seasonOf(d: Date = new Date()): Season {
+  const m = d.getMonth();
+  return m <= 1 || m === 11 ? 'winter' : m <= 4 ? 'spring' : m <= 7 ? 'summer' : 'autumn';
+}
+
+/** Late night: the mascot wears its sleeping cap. */
+export function isNight(d: Date = new Date()): boolean {
+  return d.getHours() < 5;
+}

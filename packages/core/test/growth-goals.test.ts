@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { dailyPrompt } from '../src/daily';
 import { goalChain, goalPhase, type Goal } from '../src/goals';
-import { ageOf, dropsForEntry, earn, feed, growthFor, INITIAL_PET } from '../src/growth';
+import { ageOf, dropsForEntry, earn, feed, growthFor, INITIAL_PET, isNight, seasonOf } from '../src/growth';
 import { consume, remaining } from '../src/quota';
 import { fillName, scrubIdentifiers } from '../src/scrub';
 
@@ -84,5 +84,17 @@ describe('daily prompt and quota', () => {
     for (let i = 0; i < 3; i++) s = consume(s, 'scenario', day1).state;
     expect(consume(s, 'scenario', day1).allowed).toBe(false);
     expect(remaining(s, 'scenario', new Date('2026-09-26T09:00:00'))).toBe(3);
+  });
+});
+
+
+describe('mascot look', () => {
+  it('knows the season and the small hours', () => {
+    expect(seasonOf(new Date('2026-01-10'))).toBe('winter');
+    expect(seasonOf(new Date('2026-04-10'))).toBe('spring');
+    expect(seasonOf(new Date('2026-07-10'))).toBe('summer');
+    expect(seasonOf(new Date('2026-10-10'))).toBe('autumn');
+    expect(isNight(new Date('2026-10-10T02:30:00'))).toBe(true);
+    expect(isNight(new Date('2026-10-10T09:30:00'))).toBe(false);
   });
 });
