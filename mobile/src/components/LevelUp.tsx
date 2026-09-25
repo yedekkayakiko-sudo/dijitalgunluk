@@ -48,7 +48,7 @@ export function LevelUp() {
           <Label>Seviye {level} · {chapterFor(level).name}</Label>
           <T v="title" style={{ textAlign: 'center' }}>{title}</T>
           <Animated.View style={{ transform: [{ scale }], marginVertical: space.s }}>
-            <Mascot size={160} expression="happy" look={info.look} />
+            <Mascot size={160} expression="happy" look={info.look} night={false} />
           </Animated.View>
           {newForm ? <T v="heading">Yeni görünüm: {form!.name}</T> : null}
           <T v="muted" style={{ textAlign: 'center' }}>{line}</T>

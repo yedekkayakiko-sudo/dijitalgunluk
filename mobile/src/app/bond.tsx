@@ -53,7 +53,7 @@ export default function Bond() {
     <Screen>
       <Stack.Screen options={{ title: settings.mascotName }} />
       <View style={{ alignItems: 'center', gap: space.s }}>
-        <Mascot size={190} expression="happy" look={info.look} />
+        <Mascot size={190} expression="happy" look={info.look} night={false} />
         <T v="title">{settings.mascotName}</T>
         <T v="muted">
           Seviye {info.level} · {info.chapter.name}

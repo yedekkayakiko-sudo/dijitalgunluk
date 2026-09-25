@@ -6,6 +6,17 @@ Seni tanıdıkça büyüyen, zor günlerde bir dost gibi yanında olan, geçmiş
 
 📌 Ürün vizyonu, iş modeli, SWOT ve yol haritası: [docs/URUN.md](docs/URUN.md)
 
+## v0.4'te neler yeni
+
+- **Yeni maskot:** yuvarlak, kocaman gözlü, başında filiz olan bir yaratık. 30 seviye ve 10 görünüm: kulaklar, yaprak kuyruk, tomurcuk, çiçek, benekler, çiçek taç, ışıltı. 8 yüz ifadesi, seviyeyle açılan 9 aksesuar.
+- **Sana benzer:** gece yazıyorsan gece kuşu olur, kahveyi seviyorsan elinde bir fincan olur (kitap, müzik, doğa, pati dostu…).
+- **Bağ sistemi (su vermenin yerine):** puan; sayfa yazmak, derin yazmak, hedefe bakmak, mektup, eski bir anıya dönmek gibi anlamlı anlardan gelir. Günlük tavan var; ekrana basarak kasılmaz, yazmadığın gün hiçbir şey kaybettirmez.
+- **Anı rafı:** her sayfa rafa küçük bir anı bırakır (☕ 🌊 💼 🎂…); dokununca o güne dönersin.
+- **Seni tanıdıkça:** sayfa sayısı arttıkça açılan içgörü kartları (yazma saatin, seni en çok meşgul eden, günlerini aydınlatan kişi, iyi gelen/yoran, haftanın ritmi…). Hepsi telefonda hesaplanır.
+- **İyi geceler ritüeli**, seviye kutlaması, yetişkin ve sakin bir arayüz.
+- **Karakter dosyası baştan yazıldı:** çekirdek anayasa + 6 beceri dosyası (`server/persona/skills/`). "Dost acı da söyler tatlı da", önce anlamak için sorar. Yeni **Dobra dost** tonu.
+- **İnsan tanıma yeniden yazıldı:** "kız kardeşim", "en yakın arkadaşım" gibi ilişkiler yakalanır; unvanlar, markalar, dizi adları kişi sayılmaz.
+
 ## v0.3'te neler var
 
 **İlk dakikadan "beni tanıyor" hissi**
