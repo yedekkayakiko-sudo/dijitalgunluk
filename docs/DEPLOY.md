@@ -21,6 +21,7 @@ npx wrangler d1 migrations apply pusula-events --remote
 npx wrangler secret put ANTHROPIC_API_KEY   # anahtarı yapıştır
 npx wrangler secret put APP_KEY             # uzun, rastgele bir metin (uygulamayla paylaşılır)
 npx wrangler secret put ADMIN_KEY           # istatistikleri okumak için, sadece sende kalsın
+npx wrangler secret put HASH_SALT           # rastgele bir metin; günlük kotalardaki kimlikleri karıştırır
 npm run deploy
 ```
 
@@ -36,6 +37,18 @@ Kontrol etmek için:
 curl https://pusula-gunluk.<hesabın>.workers.dev/health
 # {"ok":true,"ai":true,"embeddings":false}
 ```
+
+### Kötüye kullanım korumaları (wrangler.toml)
+
+| Ayar | Varsayılan | Ne yapar |
+|---|---|---|
+| `[[ratelimits]]` | dakikada 30 | Cloudflare seviyesinde, kurulum başına anlık sınır |
+| `INSTALL_DAILY_LIMIT` | 80 | Bir kurulumun günlük yapay zekâ çağrısı |
+| `IP_DAILY_LIMIT` | 250 | Bir IP adresinin günlük çağrısı |
+| `GLOBAL_DAILY_LIMIT` | 3000 | Tüm hizmetin günlük tavanı (aylık harcama limitinin altında ikinci sigorta) |
+
+- Kriz dili içeren mesajlar hiçbir sınıra takılmaz.
+- Kimlikler, her gün değişen bir tuzla karıştırılarak (hash) sayılır; günler arasında kimse izlenemez.
 
 ## 3. Maskotu test et (yaklaşık $1)
 
@@ -58,6 +71,14 @@ curl -H "x-admin-key: <ADMIN_KEY>" "https://.../v1/stats?since=2026-10-01"
 
 - **D1 / D7 / D30 geri dönüş:** `app_open` satırlarında `d` değeri kurulumdan bu yana geçen günü gösterir (0, 1, 7, 14, 30). Örneğin `d=7` sayısının `d=0` sayısına oranı, yaklaşık 7. gün geri dönüş oranıdır.
 - **Kuzey yıldızı metriği:** haftada en az 3 gün yazan kullanıcı sayısı. Buna yakın bir sinyal için `entry_saved` sayılarına bak.
+
+## Telefonda deneme
+
+Uygulamada **Ayarlar → Sistem kontrolü** ekranı şunları gösterir:
+- şifrelemenin, bildirimlerin, sensörün ve sunucunun çalışıp çalışmadığı,
+- yapay zekânın canlı yanıt süresi.
+
+**"Raporu paylaş"** ile sonucu gönderebilirsin; rapor hiçbir sayfa içeriği içermez.
 
 ## Anahtarsız deneme
 

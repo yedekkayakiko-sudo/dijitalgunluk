@@ -102,7 +102,21 @@ Hepsi anonim, kimliksiz sayılardan okunur (`docs/DEPLOY.md`).
 - Anonim istatistik
 - Ücretsiz Cloudflare sunucusu
 
+**v1.0'a eklenen "vay be" paketi (v0.3):**
+- Tanışma soruları ve kişisel ilk karşılama
+- Göz kırpan, mevsime göre giyinen maskot
+- Yazarken eşlik eden maskot
+- Akan sohbet yanıtları
+- "Hatırlıyor musun?" anıları
+- Paylaşılabilir maskot kartı
+- Duygu üzerinden hatırlama
+- Dolaylı kriz işaretleri ve modelin risk değerlendirmesi
+- Sunucu tarafı günlük tavanlar
+- Sistem kontrolü ekranı
+- Bellek dostu şifreli yedek
+
 **v1.1 (kapalı testten öğrendiklerimizle):**
+- **Android ana ekran widget'ı:** maskot ve günün sorusu. Geri dönüşü en çok artıracak özellik; yerel modül gerektirdiği için ilk cihaz testinden sonraya bırakıldı.
 - Ses notu (Android'in cihaz içi Türkçe tanımasıyla, ücretsiz ve cihazdan çıkmadan)
 - Hafıza bahçesi: her sayfa bir çiçek, her insan bir ağaç
 - Pusula+ aboneliği

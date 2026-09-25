@@ -85,6 +85,7 @@ Kamera, mikrofon, kişiler, arka planda konum ve fiziksel aktivite izinleri `app
 - [ ] Değerlendirme seti gerçek modelle geçti: `npm run eval -w server -- --yes`.
 - [ ] Kriz numaraları doğrulandı.
 - [ ] Gizlilik politikası URL'si çalışıyor ve uygulamadaki metinle tutarlı.
+- [ ] Gerçek bir Android telefonda **Ayarlar → Sistem kontrolü** ekranının tamamı ✅ olsun.
 - [ ] Gerçek bir Android telefonda:
   - Sayfa yaz ve fotoğraf ekle. Uygulamayı kapatıp aç: taslak geri geliyor mu?
   - Maskota su ver, telefonu salla.
