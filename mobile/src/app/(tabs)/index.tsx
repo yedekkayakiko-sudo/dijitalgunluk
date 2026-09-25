@@ -12,6 +12,7 @@ import { StageUp } from '@/components/StageUp';
 import { Button, Card, Gap, Row, Screen, T } from '@/components/ui';
 import { track } from '@/lib/analytics';
 import { allEntryDates, kvGet, kvSet, listCheckins, listEntities, listEntries, listGoals, listLetters, loadDraft, type StoredEntry } from '@/lib/db';
+import { reindexPeopleOnce } from '@/lib/mascot';
 import { usePet } from '@/lib/pet';
 import { useSettings } from '@/lib/settings';
 import { serif, space, useColors } from '@/theme';
@@ -64,6 +65,7 @@ export default function Home() {
       let alive = true;
       setLine(null);
       (async () => {
+        await reindexPeopleOnce().catch(() => {});
         await refresh();
         const [latest, dates, allLetters, draft, all, goalList, checkins, people] = await Promise.all([
           listEntries({ limit: 5 }), allEntryDates(), listLetters(), loadDraft(), listEntries(), listGoals(), listCheckins(), listEntities('person'),

@@ -31,7 +31,7 @@ import {
 const MAX_TEXT = 6000;
 
 const persona = z.object({
-  tone: z.enum(['calm', 'energetic', 'minimal']).default('calm'),
+  tone: z.enum(['calm', 'energetic', 'minimal', 'frank']).default('calm'),
   mascotName: z.string().trim().min(1).max(24).default('Pusula'),
   hasName: z.boolean().default(false),
 });

@@ -1,7 +1,7 @@
-import { decideReaction, detectCrisis, normalizeKey, type CrisisLevel, type Entry, type EntityMention, type ReactionKind } from '@gunluk/core';
+import { decideReaction, detectCrisis, extractEntities, isUnlikelyPerson, normalizeKey, type CrisisLevel, type Entry, type EntityMention, type ReactionKind } from '@gunluk/core';
 import { track } from './analytics';
 import { aiReady, api } from './api';
-import { addReaction, linkEntities, listEntities, listEntries, recentReactions, setEmbedding } from './db';
+import { addReaction, entitiesForEntry, kvGet, kvSet, linkEntities, listEntities, listEntries, recentReactions, setEmbedding } from './db';
 import { maybeUpdateNotes, noteTexts } from './memory';
 import { rewardEntry } from './pet';
 import { readSettings } from './settings';
@@ -35,6 +35,7 @@ export async function afterSave(entry: Entry, isNew: boolean): Promise<MascotRep
     if (extracted) {
       const add = (kind: 'person' | 'place', name: string) => {
         const key = normalizeKey(name);
+        if (kind === 'person' && isUnlikelyPerson(name)) return;
         if (key && !mentions.some((m) => m.key === key)) mentions = [...mentions, { kind, name, key }];
       };
       extracted.people.forEach((n) => add('person', n));
@@ -77,4 +78,23 @@ export async function isLongHeavyPeriod(): Promise<boolean> {
   const heavyMoods = moods.length >= 5 && moods.filter((m) => m <= 2).length / moods.length >= 0.7;
   const supports = (await recentReactions(30)).filter((r) => (r.kind === 'support' || r.kind === 'crisis') && r.at >= since).length;
   return heavyMoods || supports >= 3 || entries.some((e) => detectCrisis(e.text).level === 'acute');
+}
+
+/**
+ * One-time clean-up after the people-recognition rewrite: drops names the old
+ * rules got wrong ("Kaynakları", "Claude") and adds the relations they missed
+ * ("Kız kardeşim", "En yakın arkadaşım"). Everything stays on the device.
+ */
+export async function reindexPeopleOnce(): Promise<void> {
+  if ((await kvGet('people-index')) === '2') return;
+  const entries = await listEntries();
+  for (const e of entries) {
+    if (e.privacy !== 'ai_full' || detectCrisis(e.text).level !== 'none') continue;
+    const kept: EntityMention[] = (await entitiesForEntry(e.id))
+      .filter((x) => x.kind !== 'person' || !isUnlikelyPerson(x.name))
+      .map((x) => ({ kind: x.kind, name: x.name, key: x.key }));
+    const fresh = extractEntities(e.text).filter((m) => !kept.some((k) => k.key === m.key));
+    await linkEntities(e.id, [...kept, ...fresh], e.createdAt);
+  }
+  await kvSet('people-index', '2');
 }

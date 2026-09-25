@@ -22,9 +22,9 @@ const DAY = 24 * HOUR;
 /** Themes that deserve a gentle check-in when they keep coming back. */
 const SENSITIVE_THEMES = new Set(['endise', 'yorgunluk', 'yalnizlik']);
 
-const TONE_FACTOR: Record<MascotTone, number> = { calm: 1, energetic: 1.15, minimal: 0.4 };
+const TONE_FACTOR: Record<MascotTone, number> = { calm: 1, energetic: 1.15, minimal: 0.4, frank: 1 };
 /** Minimum quiet time between two light (non-support) reactions. */
-const COOLDOWN: Record<MascotTone, number> = { calm: 20 * HOUR, energetic: 12 * HOUR, minimal: 72 * HOUR };
+const COOLDOWN: Record<MascotTone, number> = { calm: 20 * HOUR, energetic: 12 * HOUR, minimal: 72 * HOUR, frank: 20 * HOUR };
 const SUPPORT_COOLDOWN = 8 * HOUR;
 
 export interface ReactionInput {
@@ -66,11 +66,13 @@ const TEMPLATES: Record<Templated, Record<MascotTone, string[]>> = {
       'Bugün hızlı geçmiş gibi! Bir şey mi vardı ki bu kadar kısa tuttun?',
     ],
     minimal: ['Kısa ve öz. Eklemek istersen buradayım.'],
+    frank: ['Son sayfalar hep kısa. Yazacak bir şey mi yok, yoksa yazmak istemediğin bir şey mi var?'],
   },
   new_person: {
     calm: ['{s} adını ilk kez duyuyorum. Onunla nasıl tanıştınız?', '{s} kim? Merak ettim, anlatmak istersen dinlerim.'],
     energetic: ['Yeni bir isim: {s}! İlk kez mi tanıştınız?', '{s} de kim? Hikâyesini merak ettim!'],
     minimal: ['{s}: yeni bir isim. Not ettim.'],
+    frank: ['{s} kim? Hayatında yeni biri mi, yoksa hep vardı da ben mi yeni duyuyorum?'],
   },
   recurring_theme: {
     calm: [
@@ -79,6 +81,7 @@ const TEMPLATES: Record<Templated, Record<MascotTone, string[]>> = {
     ],
     energetic: ['Son günlerde {s} konusu sık sık karşıma çıkıyor. Biraz açmak ister misin?'],
     minimal: ['{s} son günlerde sık geçiyor. İstersen buradayım.'],
+    frank: ['Açık söyleyeyim: {s} son sayfalarında hep var. Bunun üzerine bir kez adamakıllı konuşalım mı?'],
   },
   support: {
     calm: [
@@ -90,16 +93,19 @@ const TEMPLATES: Record<Templated, Record<MascotTone, string[]>> = {
       'Bugün kolay değilmiş. İyi ki yazdın. Konuşmak istersen hemen buradayım.',
     ],
     minimal: ['Zor bir gün. Buradayım.'],
+    frank: ['Ağır bir gün olmuş, bunu görüyorum. Seni asıl yoran ne, olan şey mi, yoksa ondan sonra kendine söylediklerin mi?'],
   },
   welcome: {
     calm: ['İlk sayfan! Bunu, birlikte biriktireceğimiz her şeyin başlangıcı olarak saklıyorum. Hoş geldin. 🌱'],
     energetic: ['İlk sayfaaa! 🎉 Bu anı hiç unutmayacağım. Hadi birlikte büyüyelim!'],
     minimal: ['İlk sayfa. Saklandı. 🌱'],
+    frank: ['İlk sayfan. Bundan sonra seni sayfalarından tanıyacağım; ben de sana dürüst olacağım, söz.'],
   },
   celebrate: {
     calm: ['Bu sayfadan mutluluk taşıyor. Bu anı sakladığın için sevindim.', 'Ne güzel bir gün! Bunu ileride okuduğunda da gülümseyeceksin.'],
     energetic: ['Yaşasın! Bu sayfa pırıl pırıl. Bu anı çerçeveletelim!', 'Bu enerjiye bayıldım! Bugün seni en çok ne güldürdü?'],
     minimal: ['Güzel bir gün. Kaydettim.'],
+    frank: ['Bak, bu sayfa ışıl ışıl. Zor günlerde buna geri döneceğiz, haberin olsun.'],
   },
 };
 

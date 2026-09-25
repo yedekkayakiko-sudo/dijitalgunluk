@@ -2,6 +2,7 @@ import type Anthropic from '@anthropic-ai/sdk';
 import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 import { ClaudeMascot } from '../src/ai';
+import { personaText } from '../persona/bundle.mjs';
 import { PERSONA } from '../src/persona.generated';
 
 function fakeClient(response: object) {
@@ -56,8 +57,8 @@ describe('ClaudeMascot', () => {
     expect(await new ClaudeMascot('claude-sonnet-5', client).text(req)).toBeNull();
   });
 
-  it('ships the persona exactly as written in persona/PUSULA.md', () => {
-    const md = readFileSync(new URL('../persona/PUSULA.md', import.meta.url), 'utf8');
-    expect(PERSONA, 'run: npm run persona -w server').toBe(md);
+  it('ships the persona exactly as written in persona/', () => {
+    expect(PERSONA, 'run: npm run persona -w server').toBe(personaText());
+    expect(PERSONA).toContain('Dost acı da söyler');
   });
 });

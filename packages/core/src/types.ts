@@ -1,7 +1,7 @@
 /** "sadece ben" / "AI görsün ama analiz etmesin" / "AI tam analiz etsin" */
 export type PrivacyLevel = 'private' | 'ai_read' | 'ai_full';
 
-export type MascotTone = 'calm' | 'energetic' | 'minimal';
+export type MascotTone = 'calm' | 'energetic' | 'minimal' | 'frank';
 
 export type EntryKind = 'entry' | 'one_word';
 

@@ -7,6 +7,7 @@ export const TONES: { value: MascotTone; label: string; sample: string }[] = [
   { value: 'calm', label: 'Sakin ve bilge', sample: 'Bugün biraz hızlı geçmiş gibi. Anlatmak istersen buradayım.' },
   { value: 'energetic', label: 'Enerjik ve samimi', sample: 'Bugün hızlı geçmiş gibi! Aklında kalan tek bir an ne olurdu?' },
   { value: 'minimal', label: 'Minimal ve sessiz', sample: 'Kısa ve öz. Eklemek istersen buradayım.' },
+  { value: 'frank', label: 'Dobra dost', sample: 'Açık konuşayım: yine 21’e kadar çalışmışsın. Bunu kim için yapıyorsun?' },
 ];
 
 export function TonePicker({ value, onChange }: { value: MascotTone; onChange: (t: MascotTone) => void }) {
