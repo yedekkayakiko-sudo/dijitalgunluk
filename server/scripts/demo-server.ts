@@ -25,6 +25,7 @@ function chatReply(req: TextRequest): string {
 const demo: Mascot = {
   async stream(req, onText) {
     const full = chatReply(req);
+    await new Promise((r) => setTimeout(r, 900)); // "thinking" before the first word
     for (const word of full.split(/(?<= )/)) {
       onText(word);
       await new Promise((r) => setTimeout(r, 45));
@@ -36,6 +37,10 @@ const demo: Mascot = {
     if (req.task.includes('Kalp kırıklığı modu')) return 'Bu konuyu açman cesaret istiyor. Öbür yolda da kolay günler seni beklemiyordu: o şehirde tanıdığın kimse olmayacaktı ve ilişkinizdeki sorular muhtemelen seninle birlikte taşınacaktı. O gün, o günkü bilginle karar verdin. Bu süreçte neye ihtiyacın olduğunu daha net görüyorsun. Bugün elinde olan küçük adım ne olabilir? Her zaman bir çıkış yolu var.';
     if (req.task.includes('Alternatif senaryo')) return 'Ya çay yerine kahve içseydin? Belki toplantıda göz kapakların bu kadar ağırlaşmazdı ama öğleden sonra kalbin küt küt atardı. Yürüyüşte gördüğün o sokak kedisini de kaçırırdın belki. Bence çay iyi seçimdi. ☕';
     if (req.task.includes('mektup')) return 'Sevgili {AD},\n\nBu hafta sayfalarında Zeynep\'in adı sık geçti ve her seferinde satırların biraz daha aydınlandı. Yorgun günlerin de oldu ama yine de yazmaya devam ettin. Bu, kendine verdiğin sessiz bir sözün işareti.\n\nGelecek hafta da buradayım.';
+    if (req.task.includes('ilk günlük sayfası')) {
+      const note = /- Hayatındaki önemli insanlar: (.+)/.exec(req.task)?.[1];
+      return `İlk sayfan! 🌱 ${note ? `${note} hakkında anlattıklarını unutmadım; ` : ''}seni tanımaya başladım bile. Hoş geldin.`;
+    }
     if (req.task.includes('zor bir gün')) return 'Bugün seni çok yormuş gibi. İyi ki yazdın. Anlatmak istersen buradayım, acele yok.';
     if (req.task.includes('ilk kez bir isim')) return 'Zeynep ile tanışmanız nasıl oldu? Kafede kitaplardan konuşmanız çok tatlı geldi. 📚';
     return 'Bunu benimle paylaştığın için teşekkürler. 🌱';

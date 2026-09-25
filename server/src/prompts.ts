@@ -46,7 +46,7 @@ export const CRISIS_NOTE =
 export const LONG_HEAVY_NOTE =
   'UZUN AĞIR DÖNEM NOTU: Kullanıcının son iki haftası çoğunlukla ağır geçmiş. Uygunsa, bir kez ve nazikçe, bir uzmanla konuşmanın iyi gelebileceğini söyle.';
 
-export type ReactionIntent = 'new_person' | 'short_streak' | 'recurring_theme' | 'support' | 'crisis' | 'celebrate';
+export type ReactionIntent = 'new_person' | 'short_streak' | 'recurring_theme' | 'support' | 'crisis' | 'celebrate' | 'welcome';
 
 const INTENT: Record<ReactionIntent, string> = {
   new_person: 'Sayfada ilk kez bir isim geçti. Hafif bir merakla o kişiyi sor.',
@@ -55,10 +55,11 @@ const INTENT: Record<ReactionIntent, string> = {
   support: 'Kullanıcı zor bir gün yaşamış. Önce yanında ol, duygusunu gör; tavsiye yağdırma. Konuşmak isterse orada olduğunu söyle.',
   crisis: 'Kullanıcı ağır bir şey yazdı. Kriz protokolünü uygula.',
   celebrate: 'Kullanıcı mutlu bir gün yaşamış. Onunla birlikte sevin, içten ve kısa.',
+  welcome: 'Bu, kullanıcının ilk günlük sayfası. Onu sıcacık karşıla. Hafıza notların varsa, oradan somut bir ayrıntıyı sayfayla bağlayıp "seni tanımaya başladım" hissini ver. Sayfa ağır bir şey anlatıyorsa önce onu gör.',
 };
 
 export function reactionTask(intent: ReactionIntent, p: Persona, subject: string | null, notes: string[]): string {
-  const long = intent === 'support' || intent === 'crisis';
+  const long = intent === 'support' || intent === 'crisis' || intent === 'welcome';
   return [
     'Görev: Kullanıcı az önce bir günlük sayfası kaydetti. Ona tek bir kısa mesajla karşılık ver.',
     `Amaç: ${INTENT[intent]}${subject ? ` (Konu: ${subject})` : ''}`,

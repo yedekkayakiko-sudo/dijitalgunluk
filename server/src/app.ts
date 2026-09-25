@@ -41,7 +41,7 @@ const notes = z.array(z.string().max(200)).max(40).default([]);
 
 const schemas = {
   reaction: persona.extend({
-    kind: z.enum(['new_person', 'short_streak', 'recurring_theme', 'support', 'crisis', 'celebrate']),
+    kind: z.enum(['new_person', 'short_streak', 'recurring_theme', 'support', 'crisis', 'celebrate', 'welcome']),
     subject: z.string().max(80).nullable(),
     draft: z.string().max(600),
     entry: text,
