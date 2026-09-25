@@ -1,3 +1,4 @@
+import { emotionalTone } from './emotion';
 import { classifyTopic } from './safety';
 import { wordCount } from './text';
 import type { Entry } from './types';
@@ -21,5 +22,7 @@ export function scenarioEligibility(
   const topic = classifyTopic(entry.text);
   if (topic === 'blocked') return { eligible: false, reason: 'sensitive' };
   if (wordCount(entry.text) < 5) return { eligible: false, reason: 'too_short' };
-  return { eligible: true, mode: topic };
+  // A painful day is never played for laughs, even without a "serious" keyword.
+  const mode = topic === 'light' && emotionalTone(entry.text).negative >= 0.45 ? 'heartache' : topic;
+  return { eligible: true, mode };
 }

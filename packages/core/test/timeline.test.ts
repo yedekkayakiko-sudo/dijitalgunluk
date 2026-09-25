@@ -57,6 +57,9 @@ describe('scenarioEligibility', () => {
   it('plays breakups and regrets in the careful heartache mode', () => {
     expect(scenarioEligibility({ text: 'Bugün sevgilimle ayrıldık, çok pişmanım.', privacy: 'ai_full' })).toEqual({ eligible: true, mode: 'heartache' });
   });
+  it('plays a painful day carefully, never for laughs', () => {
+    expect(scenarioEligibility({ text: 'Bugün çok kötü geçti. Toplantıda azar yedim, eve gelince ağladım. Kırıldım.', privacy: 'ai_full' })).toEqual({ eligible: true, mode: 'heartache' });
+  });
   it('never plays grief, abuse or crisis, nor non-analysable entries', () => {
     expect(scenarioEligibility({ text: 'Dedem geçen hafta vefat etti, keşke daha sık gitseydim.', privacy: 'ai_full' })).toEqual({ eligible: false, reason: 'sensitive' });
     expect(scenarioEligibility({ text: 'Bana şiddet uyguladı, keşke oraya hiç gitmeseydim.', privacy: 'ai_full' })).toEqual({ eligible: false, reason: 'sensitive' });

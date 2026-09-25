@@ -1,6 +1,7 @@
 import { detectCrisis, isSafeMascotText, scenarioEligibility } from '@gunluk/core';
 import { Hono, type Context } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
+import { cors } from 'hono/cors';
 import { z } from 'zod';
 import type { Mascot, TextRequest } from './ai';
 import type { Config } from './config';
@@ -115,6 +116,9 @@ export function createApp({ config, voice, fast, embedder, events }: Deps) {
     console.error(`[${c.req.method} ${c.req.path}]`, err.name, (err as { status?: number }).status ?? '');
     return c.json({ error: 'upstream_error' }, 502);
   });
+
+  // No cookies or sessions exist, so open CORS is safe; it lets the web preview talk to the server.
+  app.use('*', cors({ origin: '*', allowHeaders: ['content-type', 'x-app-key', 'x-install-id', 'x-admin-key'] }));
 
   app.get('/health', (c) => c.json({ ok: true, ai: !!voice, embeddings: !!embedder }));
 
